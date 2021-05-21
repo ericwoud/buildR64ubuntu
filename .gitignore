@@ -1,0 +1,8 @@
+/gcc/
+/*.diff
+/*.deb
+/*.img*
+/*.tar*
+/*.bin
+/*.log
+

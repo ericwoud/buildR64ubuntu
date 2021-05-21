@@ -1,0 +1,27 @@
+diff -NarU 5 a/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts b/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
+--- a/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts	2021-05-12 11:29:16.000000000 +0200
++++ b/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts	2021-05-15 15:15:07.214758959 +0200
+@@ -176,10 +176,22 @@
+ 				port@4 {
+ 					reg = <4>;
+ 					label = "lan3";
+ 				};
+ 
++				port@5 {
++					reg = <5>;
++					label = "aux";
++					phy-mode = "rgmii";
++
++					fixed-link {
++						speed = <1000>;
++						full-duplex;
++						pause;
++					};
++				};
++
+ 				port@6 {
+ 					reg = <6>;
+ 					label = "cpu";
+ 					ethernet = <&gmac0>;
+ 					phy-mode = "2500base-x";
+
