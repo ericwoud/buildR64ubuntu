@@ -97,7 +97,7 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 
 ## TODO:
 
-* Get FDB delete fuctions to work, see [vlan enabled bridge bug?](http://forum.banana-pi.org/t/vlan-enabled-bridge-bug/12254)
+* Get FDB delete functions to work, see [vlan enabled bridge bug?](http://forum.banana-pi.org/t/vlan-enabled-bridge-bug/12254)
 * Test all new changes in build from scratch.
 * Check building on R64.
 * Implement 802.11k 802.11r 802.11v.
