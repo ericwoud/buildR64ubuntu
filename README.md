@@ -1,13 +1,13 @@
-# buildWubuntu
+# buildR64ubuntu
 
 Install a minimal Ubuntu on Banana Pi R64 from scratch. 
 
 Based on: [buildWubuntu](https://github.com/ericwoud/buildWubuntu.git)
-And: [franc-w's atf](https://github.com/frank-w/BPI-R64-ATF)
-And: [franc-w's kernel](https://github.com/frank-w/BPI-R2-4.14/tree/5.12-main)
+And: [frank-w's atf](https://github.com/frank-w/BPI-R64-ATF)
+And: [frank-w's kernel](https://github.com/frank-w/BPI-R2-4.14/tree/5.12-main)
 
 
-USE AT YOUR OWN RISC!!!
+USE AT YOUR OWN RISK!!!
 
 ## Getting Started
 
@@ -125,8 +125,8 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 * Deletion of Kernel. Use -K
 * Deletion of Firmware. Use -F
 * Deletion of Boot sources. Use -B
-* Make modules_prepare omly. Use -p together with -k
-* Make menuconfig omly. Use -m together with -k
+* Make modules_prepare only. Use -p together with -k
+* Make menuconfig only. Use -m together with -k
 * Default options when no options entered -brkta
 * Adding extra packages to install. See extrapackages= at top of build script.
 * Other variables to tweak also at top of build script. Try building a different release or kernel version.
@@ -135,8 +135,8 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 
 ## Acknowledgments
 
-* [franc-w's atf](https://github.com/frank-w/BPI-R64-ATF)
-* [franc-w's kernel](https://github.com/frank-w/BPI-R2-4.14/tree/5.12-main)
+* [frank-w's atf](https://github.com/frank-w/BPI-R64-ATF)
+* [frank-w's kernel](https://github.com/frank-w/BPI-R2-4.14/tree/5.12-main)
 * [mtk-openwrt-atf](https://github.com/mtk-openwrt/arm-trusted-firmware)
 * [u-boot](https://github.com/u-boot/u-boot)
 * [McDebian](https://github.com/Chadster766/McDebian)
