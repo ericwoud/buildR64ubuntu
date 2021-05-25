@@ -71,7 +71,7 @@ fi
 rootpart="BPIR64"${ATFDEVICE^^}
 
 function finish {
-  if [ -v rootfsdir ] && [ ! -z rootfsdir ]; then
+  if [ -v rootfsdir ] && [ ! -z $rootfsdir ]; then
     echo Running exit function to clean up...
     while [[ $(mountpoint $rootfsdir) =~  (is a mountpoint) ]]; do
       echo "Unmounting...DO NOT REMOVE!"
@@ -141,7 +141,7 @@ fi
 
 if [ "$(cat /proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
   echo "Not running on Bananapi BPI-R64"
-  makej="-j4"
+  makej="-j4" ##### Change: Find nr of cores....
   if [ "$S" = true ] && [ "$D" = true ]; then
     echo "Make SD-CARD!"
     formatsd
@@ -158,7 +158,7 @@ if [ "$(cat /proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
   fi
 else
   echo "Running on Bananapi BPI-R64"
-  makej="-j1" # make with one core on R64 to try not overheating cpu
+  makej="-j2"
   rootfsdir="" ; r="" ; R=""
   gcc=""
 fi
@@ -348,6 +348,10 @@ if [ "$k" = true ] ; then
   fi  
   makeoptions="--directory="$kerneldir" LOCALVERSION="$KERNELLOCALVERSION" DEFAULT_HOSTNAME=R64UBUNTU ARCH=arm64 "$crossc" KCFLAGS=-w"
   outoftreeoptions=${makeoptions/--directory=/KDIR=}
+  if [ "$p" = true ]; then
+    $sudo make $makeoptions clean scripts modules_prepare
+    exit
+  fi
   $sudo cp --remove-destination -v kernel-$kernelversion/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig
   $sudo make $makeoptions r64ubuntu_defconfig
   if [ "$m" = true ] ; then
@@ -377,14 +381,10 @@ if [ "$k" = true ] ; then
   $sudo make $makeoptions KCONFIG_ALLCONFIG=.config allnoconfig # only add config entries added in patch.diff or bash.script
   diff -Naur  $kerneldir/before.config $kerneldir/.config >config-changes.diff
   $sudo rm -f $kerneldir/before.config
-  if [ "$p" = true ]; then
-    $sudo make $makeoptions clean
-    $sudo make $makeoptions scripts modules_prepare
-    exit
-  fi
   $sudo make $makeoptions $makej scripts modules_prepare
   kernelrelease=$($sudo make -s $makeoptions kernelrelease)
-  $sudo make $makeoptions $makej UIMAGE_LOADADDR=0x40008000 Image dtbs # Remove UIMAGE_LOADADDR= ???
+  $sudo make $makeoptions $makej UIMAGE_LOADADDR=0x40008000 Image dtbs modules # Remove UIMAGE_LOADADDR= ???
+  [[ $? != 0 ]] && exit  
   $sudo mkimage -A arm64 -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernelrelease" \
                 -d $kerneldir/arch/arm64/boot/Image $kerneldir/uImage
   $sudo mkdir -p $rootfsdir/boot/
@@ -393,14 +393,13 @@ if [ "$k" = true ] ; then
   $sudo cp -af $kerneldir/uImage $rootfsdir/boot/$kernelrelease.uImage
   $sudo echo -e "image=boot/$kernelrelease.uImage\ndtb=boot/$kernelrelease.dtb" | \
              $sudo tee    $rootfsdir/boot/uEnv.txt
-  $sudo make $makeoptions $makej modules
   $sudo make $makeoptions modules_install INSTALL_MOD_PATH="../../.."
   if [ $kerneldir/outoftree/* != "$kerneldir/outoftree/*" ]; then
+    $sudo mkdir -p $rootfsdir/lib/modules/$kernelrelease/extra
     for module in $kerneldir/outoftree/*
     do 
       (cd $module; $sudo make $outoftreeoptions) 
-      $sudo mkdir -p $rootfsdir/lib/modules/$kernelrelease/extra
-      $sudo cp -fv $module/*.ko $rootfsdir/lib/modules/$kernelrelease/extra
+      [[ $? == 0 ]] && $sudo cp -fv $module/*.ko $rootfsdir/lib/modules/$kernelrelease/extra
     done
   fi
   $sudo depmod -ab $rootfsdir/. $kernelrelease
@@ -409,4 +408,6 @@ if [ "$k" = true ] ; then
 fi
 
 exit
+
+./build.sh: line 142: warning: command substitution: ignored null byte in input
 
