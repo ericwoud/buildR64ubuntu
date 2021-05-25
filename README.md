@@ -6,6 +6,8 @@ Based on: [buildWubuntu](https://github.com/ericwoud/buildWubuntu.git)
 And: [frank-w's atf](https://github.com/frank-w/BPI-R64-ATF)
 And: [frank-w's kernel](https://github.com/frank-w/BPI-R2-4.14/tree/5.12-main)
 
+Now includes a patch so that temperature is regulated at 87 instead of 47 degrees!
+Delete the file thermal_cpu.patch bofore building, if you do not want to.
 
 USE AT YOUR OWN RISK!!!
 

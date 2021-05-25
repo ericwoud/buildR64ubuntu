@@ -1,0 +1,23 @@
+diff -Naur a/arch/arm64/boot/dts/mediatek/mt7622.dtsi b/arch/arm64/boot/dts/mediatek/mt7622.dtsi
+--- a/arch/arm64/boot/dts/mediatek/mt7622.dtsi	2021-05-12 11:29:16.000000000 +0200
++++ b/arch/arm64/boot/dts/mediatek/mt7622.dtsi	2021-05-15 15:15:07.214758959 +0200
+@@ -170,14 +170,14 @@
+ 			cooling-maps {
+ 				map0 {
+ 					trip = <&cpu_passive>;
+-					cooling-device = <&cpu0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+-							 <&cpu1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
++					cooling-device = <&cpu0 0 0>,
++							 <&cpu1 0 0>;
+ 				};
+ 
+ 				map1 {
+ 					trip = <&cpu_active>;
+-					cooling-device = <&cpu0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+-							 <&cpu1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
++					cooling-device = <&cpu0 0 0>,
++							 <&cpu1 0 0>;
+ 				};
+ 
+ 				map2 {
+

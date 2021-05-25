@@ -191,7 +191,8 @@ if [ "$F" = true ] ; then
   $sudo rm -rf $rootfsdir/lib/firmware/mediatek
 fi
 if [ "$a" = true ]; then
-  $sudo apt-get install --yes git wget build-essential flex bison gcc-aarch64-linux-gnu u-boot-tools libncurses-dev
+  $sudo apt-get install --yes git wget build-essential flex bison gcc-aarch64-linux-gnu \
+                              u-boot-tools libncurses-dev libssl-dev
   if [ -z $rootfsdir ]; then
     $sudo apt-get install --yes bc ca-certificates  # install these when running on R64
   else
@@ -376,8 +377,12 @@ if [ "$k" = true ] ; then
   $sudo make $makeoptions KCONFIG_ALLCONFIG=.config allnoconfig # only add config entries added in patch.diff or bash.script
   diff -Naur  $kerneldir/before.config $kerneldir/.config >config-changes.diff
   $sudo rm -f $kerneldir/before.config
+  if [ "$p" = true ]; then
+    $sudo make $makeoptions clean
+    $sudo make $makeoptions scripts modules_prepare
+    exit
+  fi
   $sudo make $makeoptions $makej scripts modules_prepare
-  [[ "$p" = true ]] && exit
   kernelrelease=$($sudo make -s $makeoptions kernelrelease)
   $sudo make $makeoptions $makej UIMAGE_LOADADDR=0x40008000 Image dtbs # Remove UIMAGE_LOADADDR= ???
   $sudo mkimage -A arm64 -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernelrelease" \
