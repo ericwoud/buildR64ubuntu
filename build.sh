@@ -139,7 +139,7 @@ else
   exec 2> >(tee build-error.log)
 fi
 
-if [ "$(cat /proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
+if [ "$(tr -d '\0' </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
   echo "Not running on Bananapi BPI-R64"
   makej="-j4" ##### Change: Find nr of cores....
   if [ "$S" = true ] && [ "$D" = true ]; then

@@ -11,5 +11,5 @@ BindCarrier=eth0
 Bridge=brlan
 
 [BridgeVLAN]
-VLAN=2-3
+VLAN=1-3
 
