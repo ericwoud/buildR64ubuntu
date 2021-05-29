@@ -5,8 +5,11 @@ LANG=C
 GCC=""   # use standard ubuntu gcc version
 #GCC="https://releases.linaro.org/components/toolchain/binaries/latest-7/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz"
 
-#MAINLINE="http://kernel.ubuntu.com/~kernel-ppa/mainline/v5.4"
-MAINLINE="http://kernel.ubuntu.com/~kernel-ppa/mainline/v5.12.2"
+
+KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
+KERNELVERSION="v5.12.2"
+#KERNEL="https://github.com/torvalds/linux.git"
+#KERNELVERSION="v5.12"
 
 KERNELLOCALVERSION="-0"           # Is added to kernelversion by make for name of modules dir.
 
@@ -73,6 +76,7 @@ rootpart="BPIR64"${ATFDEVICE^^}
 function finish {
   if [ -v rootfsdir ] && [ ! -z $rootfsdir ]; then
     echo Running exit function to clean up...
+    $sudo sync
     while [[ $(mountpoint $rootfsdir) =~  (is a mountpoint) ]]; do
       echo "Unmounting...DO NOT REMOVE!"
       $sudo umount -R $rootfsdir
@@ -118,7 +122,6 @@ function formatsd {
     $sudo sync
     $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
   fi
-  (eject ${device}) > /dev/null 2>&1
 }
 
 
@@ -163,8 +166,8 @@ else
   gcc=""
 fi
 
-kernelversion=$(basename $MAINLINE)
-[ ${kernelversion:0:1} == "v" ] && kernelversion="${kernelversion:1}"
+
+[ ${KERNELVERSION:0:1} == "v" ] && kernelversion="${KERNELVERSION:1}" || kernelversion=$KERNELVERSION
 schroot="$sudo LC_ALL=C LANGUAGE=C LANG=C chroot $rootfsdir"
 kerneldir=$rootfsdir/usr/src/linux-headers-$kernelversion
 echo OPTIONS: rootfs=$r kernel=$k tar=$t usb=$u apt=$a 
@@ -323,18 +326,22 @@ if [ "$k" = true ] ; then
   echo KERNELDIR: $kerneldir
   if [ ! -d "$kerneldir" ]; then
     if [ ! -f "kernel.$kernelversion.tar.gz" ]; then
-      gitbranch=$(wget -nv -qO- $MAINLINE/HEADER.html | grep -m 1 git://)
-      gitbranch=${gitbranch//&nbsp;/}
-      gitbranch=(${gitbranch//<br>/})
-      $sudo git --no-pager clone --branch ${gitbranch[1]} --depth 1 ${gitbranch[0]} $kerneldir
-      $sudo rm -rf $kerneldir/.git
-      sources=$(wget -nv -qO- $MAINLINE/SOURCES) ; readarray -t sources <<<"$sources"
-      if [ ! -z "${sources[0]}" ]; then # has SOURCES file
-        src=1
-        while [ $src -lt ${#sources[@]} ]; do
-          wget -nv -O /dev/stdout $MAINLINE"/"${sources[$src]} | $sudo patch -d $kerneldir -p1
-          let src++
-        done
+      if [ ${KERNEL: -4} == ".git" ]; then
+        $sudo git --no-pager clone --branch $KERNELVERSION --depth 1 $KERNEL $kerneldir
+      else
+        gitbranch=$(wget -nv -qO- $KERNEL/$KERNELVERSION/HEADER.html | grep -m 1 git://)
+        gitbranch=${gitbranch//&nbsp;/}
+        gitbranch=(${gitbranch//<br>/})
+        $sudo git --no-pager clone --branch ${gitbranch[1]} --depth 1 ${gitbranch[0]} $kerneldir
+        $sudo rm -rf $kerneldir/.git
+        sources=$(wget -nv -qO- $KERNEL/$KERNELVERSION/SOURCES) ; readarray -t sources <<<"$sources"
+        if [ ! -z "${sources[0]}" ]; then # has SOURCES file
+          src=1
+          while [ $src -lt ${#sources[@]} ]; do
+            wget -nv -O /dev/stdout $KERNEL/$KERNELVERSION/${sources[$src]} | $sudo patch -d $kerneldir -p1
+            let src++
+          done
+        fi
       fi
       if [ "$t" = true ]; then
         echo "Creating kernel.tar..."
@@ -408,6 +415,4 @@ if [ "$k" = true ] ; then
 fi
 
 exit
-
-./build.sh: line 142: warning: command substitution: ignored null byte in input
 
