@@ -28,7 +28,7 @@ ATFBUILDARGS="DDR3_FLYBY=1 LOG_LEVEL=40"
 UBOOTGIT="https://github.com/u-boot/u-boot.git"
 UBOOTBRANCH="v2021.01"
 #UBOOTBRANCH="v2021.04" # Hangs
-CONFIG_UBOOT_EXTRA="CONFIG_NET=n"
+CONFIG_UBOOT_EXTRA=$'CONFIG_NET=n\nCONFIG_DM_GPIO=y\nCONFIG_DM_RESET=y'
 
 # https://github.com/bradfa/flashbench.git, running multiple times:
 # sudo ./flashbench -a --count=64 --blocksize=1024 /dev/sda
@@ -37,8 +37,6 @@ SD_BLOCK_SIZE_KB=8                   # in kilo bytes
 # When the SD card was brand new, formatted by the manufacturer, parted shows partition start at 4MiB
 # 1      4,00MiB  29872MiB  29868MiB  primary  fat32        lba
 SD_ERASE_SIZE_MB=4                   # in Mega bytes
-
-
 
 DEBOOTSTR_SOURCE="http://ports.ubuntu.com/ubuntu-ports" # Ubuntu
 DEBOOTSTR_COMPNS="main,restricted,universe,multiverse"  # Ubuntu
