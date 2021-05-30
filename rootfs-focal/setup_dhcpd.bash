@@ -1,5 +1,6 @@
 #!/bin/bash
-$schroot systemctl reenable isc-dhcp-server.service
+$schroot systemctl disenable isc-dhcp-server.service
+$schroot systemctl enable isc-dhcp-server.service
 $sudo cp --no-clobber $rootfsdir/etc/dhcp/dhcpd.conf $rootfsdir/etc/dhcp/dhcpd-orig.conf
 $sudo cp              $rootfsdir/etc/dhcp/dhcpd-orig.conf $rootfsdir/etc/dhcp/dhcpd.conf
 $sudo cat <<EOT | $sudo tee -a $rootfsdir/etc/dhcp/dhcpd.conf

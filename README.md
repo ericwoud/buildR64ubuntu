@@ -100,10 +100,8 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 ## TODO:
 
 * Get FDB delete functions to work, see [vlan enabled bridge bug?](http://forum.banana-pi.org/t/vlan-enabled-bridge-bug/12254)
-* Test all new changes in build from scratch.
-* Check building on R64.
+* Check building emmc version. There is some functionality for it, but it is untested.
 * Implement 802.11k 802.11r 802.11v.
-* Check: build script can run on R64 also, to compile a new kernel.
 * MyGica T230C2 DVB-T and DVB-C support.
 * Guest WIFI
 
@@ -127,7 +125,7 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 * Deletion of Kernel. Use -K
 * Deletion of Firmware. Use -F
 * Deletion of Boot sources. Use -B
-* Make modules_prepare only. Use -p together with -k
+* Make modules_prepare only. Also makes clean and build scripts. Use -p together with -k
 * Make menuconfig only. Use -m together with -k
 * Default options when no options entered -brkta
 * Adding extra packages to install. See extrapackages= at top of build script.

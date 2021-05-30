@@ -1,17 +1,16 @@
 #!/bin/bash
 
-LANG=C
+export LANG=C
 
 GCC=""   # use standard ubuntu gcc version
 #GCC="https://releases.linaro.org/components/toolchain/binaries/latest-7/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz"
 
+#KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
+KERNEL="https://github.com/torvalds/linux.git"
 
-KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
-KERNELVERSION="v5.12.2"
-#KERNEL="https://github.com/torvalds/linux.git"
-#KERNELVERSION="v5.12"
+KERNELVERSION="v5.12"        # Kernel files in folder named 'kernel-5.12'
 
-KERNELLOCALVERSION="-0"           # Is added to kernelversion by make for name of modules dir.
+KERNELLOCALVERSION="-0"      # Is added to kernelversion by make for name of modules dir.
 
 KERNELDTB="mt7622-bananapi-bpi-r64"
 UBOOTDTB="mt7622-bananapi-bpi-r64"
@@ -39,7 +38,15 @@ SD_BLOCK_SIZE_KB=8                   # in kilo bytes
 # 1      4,00MiB  29872MiB  29868MiB  primary  fat32        lba
 SD_ERASE_SIZE_MB=4                   # in Mega bytes
 
-RELEASE="focal"                      # Ubuntu version
+
+
+DEBOOTSTR_SOURCE="http://ports.ubuntu.com/ubuntu-ports" # Ubuntu
+DEBOOTSTR_COMPNS="main,restricted,universe,multiverse"  # Ubuntu
+RELEASE="focal"                                         # Ubuntu version
+#DEBOOTSTR_SOURCE="http://ftp.debian.org/debian/"       # Debian
+#DEBOOTSTR_COMPNS="main,contrib,non-free"               # Debian
+#RELEASE="buster"                                       # Debian version
+
 NEEDEDPACKAGES="locales,hostapd,openssh-server,crda,resolvconf,iproute2,nftables,isc-dhcp-server"
 EXTRAPACKAGES="vim,dbus,screen"      # Extra packages installed in rootfs, comma separated list, no spaces
 
@@ -144,7 +151,6 @@ fi
 
 if [ "$(tr -d '\0' </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
   echo "Not running on Bananapi BPI-R64"
-  makej="-j4" ##### Change: Find nr of cores....
   if [ "$S" = true ] && [ "$D" = true ]; then
     echo "Make SD-CARD!"
     formatsd
@@ -161,7 +167,6 @@ if [ "$(tr -d '\0' </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
   fi
 else
   echo "Running on Bananapi BPI-R64"
-  makej="-j2"
   rootfsdir="" ; r="" ; R=""
   gcc=""
 fi
@@ -221,6 +226,7 @@ else
   fi
 fi
 [ ! -z $rootfsdir ] && crossc="CROSS_COMPILE="$gccpath"aarch64-linux-gnu-" || crossc=""
+makej=-j$(grep ^processor /proc/cpuinfo  | wc -l)
 echo ROOTFSDIR: $rootfsdir
 echo CROSSC: $crossc
 
@@ -230,8 +236,8 @@ if [ "$r" = true ]; then
     if [ ! -f "rootfs.$RELEASE.tar.bz2" ]; then
       packages=$NEEDEDPACKAGES","$EXTRAPACKAGES
       [[ -f "rootfs-$RELEASE/etc/network/interfaces" ]] && packages="$packages,ifupdown"
-      $sudo debootstrap --arch=arm64 --foreign --no-check-gpg --components=main,restricted,universe,multiverse \
-        --include="$packages" $RELEASE $rootfsdir "http://ports.ubuntu.com/ubuntu-ports"
+      $sudo debootstrap --arch=arm64 --foreign --no-check-gpg --components=$DEBOOTSTR_COMPNS \
+        --include="$packages" $RELEASE $rootfsdir $DEBOOTSTR_SOURCE
       $sudo cp /usr/bin/qemu-aarch64-static $rootfsdir/usr/bin/
       $schroot /debootstrap/debootstrap --second-stage
       if [ "$t" = true ]; then
@@ -249,16 +255,16 @@ if [ "$r" = true ]; then
   $schroot ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
   $schroot sed -i 's/XKBLAYOUT=\"us\"/XKBLAYOUT=\"${KEYBOARD}\"/g' /etc/default/keyboard
   echo root:$ROOTPWD | $schroot chpasswd 
-  $sudo cp -r --remove-destination -v rootfs-$RELEASE/. $rootfsdir
+  $sudo cp -r --remove-destination --dereference -v rootfs-$RELEASE/. $rootfsdir
   for bp in $rootfsdir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
   for bp in $rootfsdir/*.patch; do echo $bp ; $sudo patch -d $rootfsdir -p1 -N -r - < $bp ; $sudo rm -rf $bp ; done
   [[ -d "rootfs-$RELEASE/etc/systemd/network" ]] && $schroot systemctl reenable systemd-networkd.service
-  find "rootfs-$RELEASE/etc/systemd/system" -name "*.service"| while read service ; do
+  find -L "rootfs-$RELEASE/etc/systemd/system" -name "*.service"| while read service ; do
     $schroot systemctl reenable $(basename $service)
   done
   $sudo mkdir -p $rootfsdir/root/buildR64ubuntu
-  $sudo cp -rfv kernel-* $rootfsdir/root/buildR64ubuntu/
-  $sudo cp -rfv rootfs-* $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference kernel-* $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference rootfs-* $rootfsdir/root/buildR64ubuntu/
   $sudo cp -fv build.sh $rootfsdir/root/buildR64ubuntu/
 fi
 
@@ -300,8 +306,8 @@ loaddtb=ext4load mmc ${dev}: ${dtaddr} ${dtb}
 bootkernel=bootm ${kaddr} - ${dtaddr}
 bootcmd=run loadenvfile; run loadimage loaddtb bootkernel
 EOT
-  $sudo ARCH=arm64 $crossc make --directory=$rootfsdir/usr/src/uboot mt7622_my_bpi_defconfig all
-  $sudo $crossc make --directory=$rootfsdir/usr/src/atf PLAT=mt7622 BL33=$rootfsdir/usr/src/uboot/u-boot.bin \
+  $sudo ARCH=arm64 $crossc make $makej --directory=$rootfsdir/usr/src/uboot mt7622_my_bpi_defconfig all
+  $sudo $crossc make $makej --directory=$rootfsdir/usr/src/atf PLAT=mt7622 BL33=$rootfsdir/usr/src/uboot/u-boot.bin \
                      $ATFBUILDARGS BOOT_DEVICE=$ATFDEVICE all fip
   partdev=$(blkid -L $rootpart)
   if [ ! -z $partdev ];then
@@ -359,7 +365,7 @@ if [ "$k" = true ] ; then
     $sudo make $makeoptions clean scripts modules_prepare
     exit
   fi
-  $sudo cp --remove-destination -v kernel-$kernelversion/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig
+  $sudo cp --remove-destination --dereference -v kernel-$kernelversion/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig
   $sudo make $makeoptions r64ubuntu_defconfig
   if [ "$m" = true ] ; then
     echo -e "\nSave altered config as '.config'.\n"
@@ -395,7 +401,6 @@ if [ "$k" = true ] ; then
   $sudo mkimage -A arm64 -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernelrelease" \
                 -d $kerneldir/arch/arm64/boot/Image $kerneldir/uImage
   $sudo mkdir -p $rootfsdir/boot/
-#  $sudo cp -af $kerneldir/arch/arm64/boot/dts/mediatek/*.dtb $rootfsdir/boot/
   $sudo cp -af $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb $rootfsdir/boot/$kernelrelease.dtb
   $sudo cp -af $kerneldir/uImage $rootfsdir/boot/$kernelrelease.uImage
   $sudo echo -e "image=boot/$kernelrelease.uImage\ndtb=boot/$kernelrelease.dtb" | \
