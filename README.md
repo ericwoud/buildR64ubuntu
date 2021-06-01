@@ -3,11 +3,13 @@
 Install a minimal Ubuntu on Banana Pi R64 from scratch. 
 
 Based on: [buildWubuntu](https://github.com/ericwoud/buildWubuntu.git)
-And: [frank-w's atf](https://github.com/frank-w/BPI-R64-ATF)
-And: [frank-w's kernel](https://github.com/frank-w/BPI-R2-4.14/tree/5.12-main)
+, [frank-w's atf](https://github.com/frank-w/BPI-R64-ATF)
+and [frank-w's kernel](https://github.com/frank-w/BPI-R2-4.14/tree/5.12-main)
 
 Now includes a patch so that temperature is regulated at 87 instead of 47 degrees!
 Delete the file thermal_cpu.patch bofore building, if you do not want to.
+
+The script is in development and uses sudo. Any bug may possibly delete everything permanently!
 
 USE AT YOUR OWN RISK!!!
 
@@ -117,16 +119,19 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 * Optional scripts in the custom kernel and rootfs directory. Files with extention ".bash" 
   Environment and variables from main script can be used.
 * Optional patches in the custom kernel and rootfs directory. Files with extention ".patch"
-* Creation of archives to save time next time building. Use -t to create -T to delete.
-* Install necessairy packages. Use -a
-* Build RootFS. Use -r
-* Build Kernel. Use -k
-* Deletion of RootFS. Use -R
-* Deletion of Kernel. Use -K
-* Deletion of Firmware. Use -F
-* Deletion of Boot sources. Use -B
-* Make modules_prepare only. Also makes clean and build scripts. Use -p together with -k
-* Make menuconfig only. Use -m together with -k
+* -a : Install necessairy packages.
+* -SD : Format SD card
+* -r : Build RootFS.
+* -k : Build Kernel.
+* -c : Builds Compressed archive from SD-card or loop-device.
+* -t : Create Tar archives to save time next time building.
+* -p : Make modules_prepare only. Also makes clean and build scripts. Use together with -k
+* -m : Make menuconfig only. Use together with -k
+* -R : Delete RootFS.
+* -K : Delete Kernel.
+* -F : Delete Firmware.
+* -T : Delete Tar archives
+* -R : Delete Boot sources.
 * Default options when no options entered -brkta
 * Adding extra packages to install. See extrapackages= at top of build script.
 * Other variables to tweak also at top of build script. Try building a different release or kernel version.

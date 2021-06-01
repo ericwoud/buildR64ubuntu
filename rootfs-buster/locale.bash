@@ -1,0 +1,1 @@
+../rootfs-focal/locale.bash

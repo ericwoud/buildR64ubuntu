@@ -1,4 +1,5 @@
 /gcc/
+/src/
 /*.diff
 /*.deb
 /*.img*

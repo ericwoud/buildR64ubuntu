@@ -5,12 +5,17 @@ export LANG=C
 GCC=""   # use standard ubuntu gcc version
 #GCC="https://releases.linaro.org/components/toolchain/binaries/latest-7/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz"
 
+SRC=""                 # Installs source in /usr/src of sd-card/image
+#SRC="./src/"          # Installs source in same folder as build.sh
+
 #KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
 KERNEL="https://github.com/torvalds/linux.git"
 
 KERNELVERSION="v5.12"        # Kernel files in folder named 'kernel-5.12'
 
 KERNELLOCALVERSION="-0"      # Is added to kernelversion by make for name of modules dir.
+
+KERNELBOOTARGS="console=ttyS0,115200 rw rootwait ipp"
 
 KERNELDTB="mt7622-bananapi-bpi-r64"
 UBOOTDTB="mt7622-bananapi-bpi-r64"
@@ -28,7 +33,11 @@ ATFBUILDARGS="DDR3_FLYBY=1 LOG_LEVEL=40"
 UBOOTGIT="https://github.com/u-boot/u-boot.git"
 UBOOTBRANCH="v2021.01"
 #UBOOTBRANCH="v2021.04" # Hangs
-CONFIG_UBOOT_EXTRA=$'CONFIG_NET=n\nCONFIG_DM_GPIO=y\nCONFIG_DM_RESET=y'
+
+# Uncomment if you do not want to use a SD card, but a loop-device instead.
+#USE_LOOPDEV="true"          # Remove SD card, because of same label
+
+IMAGE_FILE="./my-bpir64.img"
 
 # https://github.com/bradfa/flashbench.git, running multiple times:
 # sudo ./flashbench -a --count=64 --blocksize=1024 /dev/sda
@@ -37,6 +46,13 @@ SD_BLOCK_SIZE_KB=8                   # in kilo bytes
 # When the SD card was brand new, formatted by the manufacturer, parted shows partition start at 4MiB
 # 1      4,00MiB  29872MiB  29868MiB  primary  fat32        lba
 SD_ERASE_SIZE_MB=4                   # in Mega bytes
+
+ROOTFS_EXT4_OPTIONS=""
+#ROOTFS_EXT4_OPTIONS="-O ^has_journal"  # No journal is faster, but you can get errors after powerloss
+
+IMAGE_SIZE_MB=2048                # Must be multiple of SD_ERASE_SIZE_MB !
+#IMAGE_SIZE_MB=""                 # Fill until end of card. Cannot use with image creaion.
+
 
 DEBOOTSTR_SOURCE="http://ports.ubuntu.com/ubuntu-ports" # Ubuntu
 DEBOOTSTR_COMPNS="main,restricted,universe,multiverse"  # Ubuntu
@@ -77,6 +93,7 @@ else
   mmc_boot=$SDMMC_BOOT
 fi
 rootpart="BPIR64"${ATFDEVICE^^}
+loopdev=""
 
 function finish {
   if [ -v rootfsdir ] && [ ! -z $rootfsdir ]; then
@@ -90,52 +107,66 @@ function finish {
     $sudo rm -rf $rootfsdir
     echo -e "Done. You can remove the card now.\n"
   fi
+  [ ! -z $loopdev ] && $sudo losetup --detach $loopdev
 }
 
 function formatsd {
-  readarray -t options < <(lsblk --nodeps -no name,serial,size | grep "^sd")
-  PS3="Choose device to format: "
-  select dev in "${options[@]}" "Quit" ; do
-    if (( REPLY > 0 && REPLY <= ${#options[@]} )) ; then
-      break
-    else exit
-    fi
-  done    
-  device="/dev/"${dev%% *}
-  for PART in `df -k | awk '{ print $1 }' | grep "${device}"` ; do umount $PART; done
-  $sudo parted -s "${device}" unit MiB print
-  echo "\nAre you sure you want to format "$device"???" 
-  read -p "Type <format> to format: " prompt
-  if [[ $prompt == "format" ]]; then
-    rootstart=$(( $SD_ERASE_SIZE_MB * 1024 ))
-    [[ $rootstart -lt 4096 ]] && rootstart=4096
-    $sudo dd of="${device}" if=/dev/zero bs=1024 count=$rootstart
-    $sudo parted -s "${device}" mklabel gpt
-    $sudo parted -s "${device}" unit kiB mkpart primary ext4 -- $rootstart 7634927
-    $sudo parted -s "${device}" unit kiB mkpart primary ext2 -- 512 1024
-    $sudo parted -s "${device}" unit kiB mkpart primary ext2 -- 1024 4096
-    $sudo parted -s "${device}" name 1 root-${ATFDEVICE}
-    $sudo parted -s "${device}" name 2 bl2
-    $sudo parted -s "${device}" name 3 fip
-    $sudo parted -s "${device}" unit kiB print
-    $sudo partprobe "${device}"
-    [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
-    stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
-    stripe=$(( ($SD_ERASE_SIZE_MB * 1024) / $SD_BLOCK_SIZE_KB ))
-    $sudo mkfs.ext4 -v -O ^has_journal -b $(( $blksize * 1024 ))  -L $rootpart \
-      -E stride=$stride,stripe-width=$stripe "${device}1"
-    $sudo sync
-    $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
+  if [ "$USE_LOOPDEV" == true ]; then 
+    if [ -f "$IMAGE_FILE" ]; then    
+      echo -e "\n$IMAGE_FILE exists. Are you sure you want to format???" 
+      read -p "Type <format> to format: " prompt
+      [[ $prompt != "format" ]] && exit
+    fi  
+    $sudo dd if=/dev/zero of=$IMAGE_FILE bs=1M count=$IMAGE_SIZE_MB status=progress 
+    loopdev=$($sudo losetup --find --show $IMAGE_FILE)
+    device=$loopdev
+    IMAGE_SIZE_MB=""
+    part="p"
+  else            
+    readarray -t options < <(lsblk --nodeps -no name,serial,size | grep "^sd")
+    PS3="Choose device to format: "
+    select dev in "${options[@]}" "Quit" ; do
+      if (( REPLY > 0 && REPLY <= ${#options[@]} )) ; then
+        break
+      else exit
+      fi
+    done    
+    device="/dev/"${dev%% *}
+    part=""
+    for PART in `df -k | awk '{ print $1 }' | grep "${device}"` ; do umount $PART; done
+    $sudo parted -s "${device}" unit MiB print
+    echo -e "\nAre you sure you want to format "$device"???" 
+    read -p "Type <format> to format: " prompt
+    [[ $prompt != "format" ]] && exit
   fi
+  rootstart=$(( $SD_ERASE_SIZE_MB * 1024 ))
+  [[ $rootstart -lt 4096 ]] && rootstart=4096
+  [ -z  $IMAGE_SIZE_MB ] && rootend="100%" || rootend=$(( $IMAGE_SIZE_MB * 1024 ))
+  $sudo dd of="${device}" if=/dev/zero bs=1024 count=$rootstart
+  $sudo parted -s "${device}" mklabel gpt
+  $sudo parted -s "${device}" unit kiB mkpart primary ext4 -- $rootstart $rootend
+  $sudo parted -s "${device}" unit kiB mkpart primary ext2 -- 512 1024
+  $sudo parted -s "${device}" unit kiB mkpart primary ext2 -- 1024 4096
+  $sudo parted -s "${device}" name 1 root-${ATFDEVICE}
+  $sudo parted -s "${device}" name 2 bl2
+  $sudo parted -s "${device}" name 3 fip
+  $sudo parted -s "${device}" unit kiB print
+  $sudo partprobe "${device}"
+  [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
+  stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
+  stripe=$(( ($SD_ERASE_SIZE_MB * 1024) / $SD_BLOCK_SIZE_KB ))
+  $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $rootpart \
+    -E stride=$stride,stripe-width=$stripe "${device}${part}1"
+  $sudo sync
+  $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
 }
-
 
 # INIT VARIABLES
 [ $USER = "root" ] && sudo="" || sudo="sudo -s"
 [[ $# == 0 ]] && args="-brkta"|| args=$@
 echo "build "$args
 cd $(dirname $0)
-while getopts ":rktabpmRKTSDBF" opt $args; do declare "${opt}=true" ; done
+while getopts ":rktabpmcRKTSDBF" opt $args; do declare "${opt}=true" ; done
 trap finish EXIT
 shopt -s extglob
 $sudo true
@@ -143,36 +174,60 @@ $sudo true
 if  [ "$k" = true ] && [ "$m" = true ]; then
   echo "Kernel menuconfig only..."
 else
-  exec > >(tee build.log)
-  exec 2> >(tee build-error.log)
+  exec > >(tee -i build.log) # Needs -i for propper CTRL-C catch
+  exec 2> >(tee build-error.log) # No -i, work better with git clone? fixed with nopager?
 fi
 
-if [ "$(tr -d '\0' </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
-  echo "Not running on Bananapi BPI-R64"
-  if [ "$S" = true ] && [ "$D" = true ]; then
-    echo "Make SD-CARD!"
-    formatsd
+if [ "$S" = true ] && [ "$D" = true ]; then
+  echo "Make SD-CARD!"
+  formatsd
+  exit
+fi
+
+mountdev=$(blkid -L $rootpart)
+if [ "$USE_LOOPDEV" == true ]; then
+  if [ ! -z $mountdev ]; then
+    echo "SD-Card is also inserted, cannot use loop-device!"
     exit
   fi
-  if [ ! -z $(blkid -L $rootpart) ]; then
-    rootfsdir=/mnt/bpirootfs
-    $sudo umount $(blkid -L $rootpart)
-    [ -d $rootfsdir ] || $sudo mkdir $rootfsdir
-    $sudo mount --source LABEL=$rootpart --target $rootfsdir -t ext4 -o exec,dev,noatime,nodiratime
+  loopdev=$($sudo losetup --find --show --partscan $IMAGE_FILE)
+  rootfsdir=/mnt/bpirootfs
+  echo "Waiting for root partition to be visible by label... Press CTRL-C to exit"
+  while [ -z $(blkid -L $rootpart) ]; do sleep 0.1; done
+else
+  if [ ! -z $mountdev ]; then
+    rootdev=$(lsblk -pilno name,type,mountpoint | grep -G 'part /$')
+    rootdev=${rootdev%% *}
+    if [ $rootdev == $mountdev ];then
+      rootfsdir="" ; r="" ; R=""      # Protect root when running from it!
+    else
+      rootfsdir=/mnt/bpirootfs
+      $sudo umount $mountdev
+    fi
   else
     echo "Not inserted!"
     exit
   fi
+fi
+
+if [ ! -z $rootfsdir ]; then
+  [ -d $rootfsdir ] || $sudo mkdir $rootfsdir
+  $sudo mount --source LABEL=$rootpart --target $rootfsdir -t ext4 \
+              -o exec,dev,noatime,nodiratime
+fi
+
+if [ "$(tr -d '\0' 2>/dev/null </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
+  echo "Not running on Bananapi BPI-R64"
 else
   echo "Running on Bananapi BPI-R64"
-  rootfsdir="" ; r="" ; R=""
   gcc=""
 fi
 
-
 [ ${KERNELVERSION:0:1} == "v" ] && kernelversion="${KERNELVERSION:1}" || kernelversion=$KERNELVERSION
 schroot="$sudo LC_ALL=C LANGUAGE=C LANG=C chroot $rootfsdir"
-kerneldir=$rootfsdir/usr/src/linux-headers-$kernelversion
+[ -z $SRC ] && src=$rootfsdir/usr/src || src=$SRC
+[ -z $rootfsdir ] && src="/usr/src"
+kerneldir=$src/linux-headers-$kernelversion
 echo OPTIONS: rootfs=$r kernel=$k tar=$t usb=$u apt=$a 
 if [ "$K" = true ] ; then
   echo Removing kernelsource...
@@ -189,8 +244,8 @@ if [ "$T" = true ] ; then
 fi
 if [ "$B" = true ] ; then
   echo Removing boot...
-  $sudo rm -rf $rootfsdir/usr/src/uboot
-  $sudo rm -rf $rootfsdir/usr/src/atf
+  $sudo rm -rf $src/uboot
+  $sudo rm -rf $src/atf
 fi
 if [ "$F" = true ] ; then
   echo Removing firmware...
@@ -198,7 +253,7 @@ if [ "$F" = true ] ; then
 fi
 if [ "$a" = true ]; then
   $sudo apt-get install --yes git wget build-essential flex bison gcc-aarch64-linux-gnu \
-                              u-boot-tools libncurses-dev libssl-dev
+                              u-boot-tools libncurses-dev libssl-dev zerofree symlinks
   if [ -z $rootfsdir ]; then
     $sudo apt-get install --yes bc ca-certificates  # install these when running on R64
   else
@@ -248,11 +303,8 @@ if [ "$r" = true ]; then
       $sudo tar -xjf rootfs.$RELEASE.tar.bz2 -C $rootfsdir
     fi
   fi
-  [ -z $($schroot locale -a | grep --ignore-case $LC) ] && $schroot locale-gen $LC
-  $schroot update-locale LANGUAGE=$LC LC_ALL=$LC LANG=$LC
-  $schroot ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
-  $schroot sed -i 's/XKBLAYOUT=\"us\"/XKBLAYOUT=\"${KEYBOARD}\"/g' /etc/default/keyboard
   echo root:$ROOTPWD | $schroot chpasswd 
+  symlinks -cr .
   $sudo cp -r --remove-destination --dereference -v rootfs-$RELEASE/. $rootfsdir
   for bp in $rootfsdir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
   for bp in $rootfsdir/*.patch; do echo $bp ; $sudo patch -d $rootfsdir -p1 -N -r - < $bp ; $sudo rm -rf $bp ; done
@@ -263,58 +315,33 @@ if [ "$r" = true ]; then
   $sudo mkdir -p $rootfsdir/root/buildR64ubuntu
   $sudo cp -rfv --no-dereference kernel-* $rootfsdir/root/buildR64ubuntu/
   $sudo cp -rfv --no-dereference rootfs-* $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference uboot-*  $rootfsdir/root/buildR64ubuntu/
   $sudo cp -fv build.sh $rootfsdir/root/buildR64ubuntu/
 fi
 
 ### BOOT ###
 if [ "$b" = true ]; then
-  $sudo mkdir -p $rootfsdir/usr/src/
+  $sudo mkdir -p $src/
   $sudo mkdir -p $rootfsdir/boot/
-  if [ ! -d "$rootfsdir/usr/src/atf" ]; then
-    $sudo git --no-pager clone --branch $ATFBRANCH --depth 1 $ATFGIT $rootfsdir/usr/src/atf
+  if [ ! -d "$src/atf" ]; then
+    $sudo git --no-pager clone --branch $ATFBRANCH --depth 1 $ATFGIT $src/atf
   fi
-  if [ ! -d "$rootfsdir/usr/src/uboot" ]; then
-    $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $rootfsdir/usr/src/uboot
+  if [ ! -d "$src/uboot" ]; then
+    $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $src/uboot
   fi
-  $sudo cp -f $rootfsdir/usr/src/uboot/configs/mt7622_rfb_defconfig $rootfsdir/usr/src/uboot/configs/mt7622_my_bpi_defconfig
-  $sudo cat <<EOT | $sudo tee -a $rootfsdir/usr/src/uboot/configs/mt7622_my_bpi_defconfig
-CONFIG_DEFAULT_DEVICE_TREE="$UBOOTDTB"
-CONFIG_DEFAULT_FDT_FILE="$UBOOTDTB"
-CONFIG_CMD_EXT4=y
-CONFIG_CMD_SETEXPR=y
-CONFIG_HUSH_PARSER=y
-CONFIG_EFI_PARTITION=y
-CONFIG_USE_DEFAULT_ENV_FILE=y
-CONFIG_DEFAULT_ENV_FILE="uEnv.txt"
-$CONFIG_UBOOT_EXTRA
-EOT
-  $sudo echo "dev="${ubootdevnr} | $sudo tee    $rootfsdir/usr/src/uboot/uEnv.txt
-  $sudo echo "bootargs=console=ttyS0,115200 root=PARTLABEL=root-${ATFDEVICE} rw rootwait ipp" | \
-                                   $sudo tee -a $rootfsdir/usr/src/uboot/uEnv.txt
-  $sudo cat <<'EOT' |              $sudo tee -a $rootfsdir/usr/src/uboot/uEnv.txt
-kaddr=0x44000000
-dtaddr=0x47000000
-image=boot/uImage
-dtb=boot/dtb
-uenv=boot/uEnv.txt
-bootdelay=-2
-loadenvfile=if ext4load mmc ${dev}: ${kaddr} ${uenv};then env import -t ${kaddr} ${filesize};fi
-loadimage=ext4load mmc ${dev}: ${kaddr} ${image}
-loaddtb=ext4load mmc ${dev}: ${dtaddr} ${dtb}
-bootkernel=bootm ${kaddr} - ${dtaddr}
-bootcmd=run loadenvfile; run loadimage loaddtb bootkernel
-EOT
-  $sudo ARCH=arm64 $crossc make $makej --directory=$rootfsdir/usr/src/uboot mt7622_my_bpi_defconfig all
-  $sudo $crossc make $makej --directory=$rootfsdir/usr/src/atf PLAT=mt7622 BL33=$rootfsdir/usr/src/uboot/u-boot.bin \
+  for bp in ./uboot-$UBOOTBRANCH/*.bash ; do source $bp ; done
+  $sudo ARCH=arm64 $crossc make $makej --directory=$src/uboot mt7622_my_bpi_defconfig all
+  $sudo $crossc make $makej --directory=$src/atf PLAT=mt7622 BL33=$src/uboot/u-boot.bin \
                      $ATFBUILDARGS BOOT_DEVICE=$ATFDEVICE all fip
   partdev=$(blkid -L $rootpart)
   if [ ! -z $partdev ];then
     device="/dev/"$(lsblk -no pkname $partdev)
     if [[ $? == 0 ]];then
+      [ "$USE_LOOPDEV" == true ] && part="p" || part=""
       $sudo dd of="${device}" if=/dev/zero bs=512 count=1
       echo -en "${mmc_boot}" | sudo dd bs=1 of="${device}" seek=$(( 512 - $MMC_BOOT_LEN ))
-      $sudo dd of="${device}2" if=$rootfsdir/usr/src/atf/build/mt7622/release/bl2.img bs=512 # remove bs=512 ???
-      $sudo dd of="${device}3" if=$rootfsdir/usr/src/atf/build/mt7622/release/fip.bin bs=512 # remove bs=512 ???
+      $sudo dd of="${device}${part}2" if=$src/atf/build/mt7622/release/bl2.img bs=512 # remove bs=512 ???
+      $sudo dd of="${device}${part}3" if=$src/atf/build/mt7622/release/fip.bin bs=512 # remove bs=512 ???
     fi
   fi 
 fi
@@ -325,7 +352,7 @@ if [ "$k" = true ] ; then
     echo "ERROR: Need to have rootfs installed first for propper directory structure!"
     exit
   fi
-  [ -d $rootfsdir/usr/src ] || $sudo mkdir -p $rootfsdir/usr/src
+  [ -d $src ] || $sudo mkdir -p $src
   kerneldir=$(realpath $kerneldir)
   echo KERNELDIR: $kerneldir
   if [ ! -d "$kerneldir" ]; then
@@ -386,10 +413,11 @@ if [ "$k" = true ] ; then
   fi
   $sudo cp --remove-destination -v $kerneldir/.config $kerneldir/before.config
   $sudo mkdir -p $kerneldir/outoftree
+  symlinks -cr .
   $sudo cp -r --remove-destination -v kernel-$kernelversion/. $kerneldir
   for bp in $kerneldir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
   for bp in $kerneldir/*.patch; do echo $bp ; $sudo patch -d $kerneldir -p1 -N -r - < $bp ; $sudo rm -rf $bp ; done
-  $sudo make $makeoptions KCONFIG_ALLCONFIG=.config allnoconfig # only add config entries added in patch.diff or bash.script
+  $sudo make $makeoptions KCONFIG_ALLCONFIG=.config allnoconfig # only add config entries added in diff.patch or script.bash
   diff -Naur  $kerneldir/before.config $kerneldir/.config >config-changes.diff
   $sudo rm -f $kerneldir/before.config
   $sudo make $makeoptions $makej scripts modules_prepare
@@ -417,5 +445,17 @@ if [ "$k" = true ] ; then
   $sudo ln -v --force --symbolic --relative --no-dereference $kerneldir $rootfsdir/lib/modules/$kernelrelease/source
 fi
 
+### COMPRESS IMAGE FROM SD-CARD OR LOOP_DEV ###
+if [ "$c" = true ] && [[ $IMAGE_SIZE_MB != "" ]]; then
+  partdev=$(blkid -L $rootpart)
+  if [ ! -z $partdev ];then
+    device="/dev/"$(lsblk -no pkname $partdev)
+    if [[ $? == 0 ]];then
+      [ "$USE_LOOPDEV" == true ] && part="p" || part=""
+      $sudo zerofree -v "${device}${part}1"
+      $sudo dd bs=1M count=$IMAGE_SIZE_MB if="${device}" status=progress | xz >$IMAGE_FILE.xz
+    fi
+  fi
+fi
 exit
 
