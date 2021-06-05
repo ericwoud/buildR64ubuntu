@@ -49,6 +49,7 @@ SD_ERASE_SIZE_MB=4                   # in Mega bytes
 
 ROOTFS_EXT4_OPTIONS=""
 #ROOTFS_EXT4_OPTIONS="-O ^has_journal"  # No journal is faster, but you can get errors after powerloss
+ROOTFS_LABEL="BPI-ROOT"
 
 IMAGE_SIZE_MB=7680                # Must be multiple of SD_ERASE_SIZE_MB !
 #IMAGE_SIZE_MB=""                 # Fill until end of card. Cannot use with image creaion.
@@ -164,7 +165,7 @@ function formatsd {
     mkpart primary ext4 $rootstart                                       $rootend \
     mkpart primary ext2 $(( $BL2_START_KB + $BL2_SIZE_KB ))            $rootstart \
     mkpart primary ext2 $BL2_START_KB         $(( $BL2_START_KB + $BL2_SIZE_KB )) \
-    name 1 root-${ATFDEVICE} \
+    name 1 root-bpir64-${ATFDEVICE} \
     name 2 fip \
     name 3 bl2 \
     print
@@ -172,7 +173,7 @@ function formatsd {
   [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
   stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
   stripe=$(( ($SD_ERASE_SIZE_MB * 1024) / $SD_BLOCK_SIZE_KB ))
-  $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $rootpart \
+  $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
     -E stride=$stride,stripe-width=$stripe "${device}${part}1"
   $sudo sync
   $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
@@ -202,9 +203,16 @@ else
   ubootdevnr=1
   mmc_boot=$SDMMC_BOOT
 fi
-rootpart="BPIR64"${ATFDEVICE^^}
 loopdev=""
-mountdev=$(blkid -L $rootpart)
+# lsblk -prno name,partlabel | grep root-bpir64-sdmmc
+lsblkdev=($(lsblk -prno name,pkname,partlabel | grep root-bpir64-${ATFDEVICE}))
+if [ ! -z $lsblkdev ]; then
+  mountdev=${lsblkdev[0]}
+  device=${lsblkdev[1]}
+else
+  mountdev=""
+  device=""
+fi
 if [ "$USE_LOOPDEV" == true ]; then
   if [ ! -z $mountdev ]; then
     echo "SD-Card is also inserted, cannot use loop-device!"
@@ -213,8 +221,8 @@ if [ "$USE_LOOPDEV" == true ]; then
   if [ "$S" = true ] && [ "$D" = true ]; then formatsd; exit; fi
   attachloopdev
   rootfsdir=/mnt/bpirootfs
-  echo "Waiting for root partition to be visible by label... Press CTRL-C to exit"
-  while [ -z $(blkid -L $rootpart) ]; do sleep 0.1; done
+  device=$loopdev
+  mountdev=${loopdev}"p1"
 else
   if [ "$S" = true ] && [ "$D" = true ]; then formatsd; exit; fi
   if [ -z $mountdev ]; then
@@ -233,7 +241,7 @@ fi
 
 if [ ! -z $rootfsdir ]; then
   [ -d $rootfsdir ] || $sudo mkdir $rootfsdir
-  $sudo mount --source LABEL=$rootpart --target $rootfsdir -t ext4 \
+  $sudo mount --source $mountdev --target $rootfsdir -t ext4 \
               -o exec,dev,noatime,nodiratime
 fi
 
@@ -358,17 +366,11 @@ if [ "$b" = true ]; then
   $sudo ARCH=arm64 $crossc make $makej --directory=$src/uboot mt7622_my_bpi_defconfig all
   $sudo $crossc make $makej --directory=$src/atf PLAT=mt7622 BL33=$src/uboot/u-boot.bin \
                      $ATFBUILDARGS BOOT_DEVICE=$ATFDEVICE all fip
-  partdev=$(blkid -L $rootpart)
-  if [ ! -z $partdev ];then
-    device="/dev/"$(lsblk -no pkname $partdev)
-    if [[ $? == 0 ]];then
-      [ "$USE_LOOPDEV" == true ] && part="p" || part=""
-      $sudo dd of="${device}" if=/dev/zero bs=512 count=1
-      echo -en "${mmc_boot}" | sudo dd bs=1 of="${device}" seek=$(( 512 - $MMC_BOOT_LEN ))
-      $sudo dd of="${device}${part}2" if=$src/atf/build/mt7622/release/fip.bin bs=512 # remove bs=512 ???
-      $sudo dd of="${device}${part}3" if=$src/atf/build/mt7622/release/bl2.img bs=512 # remove bs=512 ???
-    fi
-  fi 
+  [ "$USE_LOOPDEV" == true ] && part="p" || part=""
+  $sudo dd of="${device}" if=/dev/zero bs=512 count=1
+  echo -en "${mmc_boot}" | sudo dd bs=1 of="${device}" seek=$(( 512 - $MMC_BOOT_LEN ))
+  $sudo dd of="${device}${part}2" if=$src/atf/build/mt7622/release/fip.bin bs=512 # remove bs=512 ???
+  $sudo dd of="${device}${part}3" if=$src/atf/build/mt7622/release/bl2.img bs=512 # remove bs=512 ???
 fi
 
 ### KERNEL ###
@@ -472,19 +474,14 @@ fi
 
 ### COMPRESS IMAGE FROM SD-CARD OR LOOP_DEV ###
 if [ "$c" = true ] && [[ $IMAGE_SIZE_MB != "" ]]; then
-  partdev=$(blkid -L $rootpart)
-  if [ ! -z $partdev ];then
-    unmountrootfs
-    $sudo zerofree -v $partdev
-    if [ "$USE_LOOPDEV" == true ]; then
-      detachloopdev
-      xz --keep --force --verbose $IMAGE_FILE
-    else
-      device="/dev/"$(lsblk -no pkname $partdev)
-      if [[ $? == 0 ]];then
-        $sudo dd bs=1M count=$IMAGE_SIZE_MB if="${device}" status=progress | xz >$IMAGE_FILE.xz
-      fi
-    fi  
+  unmountrootfs
+  $sudo zerofree -v $mountdev
+  if [ "$USE_LOOPDEV" == true ]; then
+    detachloopdev
+    echo "Creating image..."
+    xz --keep --force --verbose $IMAGE_FILE
+  else
+    $sudo dd bs=1M count=$IMAGE_SIZE_MB if="${device}" status=progress | xz >$IMAGE_FILE.xz
   fi
 fi
 exit
