@@ -51,7 +51,7 @@ ROOTFS_EXT4_OPTIONS=""
 #ROOTFS_EXT4_OPTIONS="-O ^has_journal"  # No journal is faster, but you can get errors after powerloss
 ROOTFS_LABEL="BPI-ROOT"
 
-IMAGE_SIZE_MB=7680                # Must be multiple of SD_ERASE_SIZE_MB !
+IMAGE_SIZE_MB=7400                # Must be multiple of SD_ERASE_SIZE_MB !
 #IMAGE_SIZE_MB=""                 # Fill until end of card. Cannot use with image creaion.
 BL2_START_KB=512
 BL2_SIZE_KB=512
@@ -71,22 +71,6 @@ LC="en_US.utf8"                      # Locale
 TIMEZONE="Europe/Paris"              # Timezone
 KEYBOARD="us"                        # Keyboard
 ROOTPWD="admin"                      # Root password
-
-MMC_BOOT_LEN=$(( 5 * 16 ))
-SDMMC_BOOT="\
-\x00\x00\x00\x00\x00\x00\x00\x00\x8b\xab\x63\xb8\x00\x00\x00\x00\
-\x02\x00\xee\xff\xff\xff\x01\x00\x00\x00\xff\xff\xff\xff\x80\x00\
-\x00\x00\xef\x00\x00\x00\x00\x04\x00\x00\x00\x04\x00\x00\x00\x00\
-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x55\xaa\
-"
-EMMC_BOOT="\
-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
-\x02\x00\xee\xff\xff\xff\x01\x00\x00\x00\xff\xff\xe8\x00\x00\x00\
-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x55\xaa\
-"
 
 function unmountrootfs {
   if [ -v rootfsdir ] && [ ! -z $rootfsdir ]; then
@@ -137,7 +121,8 @@ function formatsd {
     IMAGE_SIZE_MB=""
     part="p"
   else            
-    readarray -t options < <(lsblk --nodeps -no name,serial,size | grep "^sd")
+    readarray -t options < <(lsblk --nodeps -no name,serial,size \
+                     | grep $formatpattern | grep -v 'boot0\|boot1\|boot2')
     PS3="Choose device to format: "
     select dev in "${options[@]}" "Quit" ; do
       if (( REPLY > 0 && REPLY <= ${#options[@]} )) ; then
@@ -173,8 +158,12 @@ function formatsd {
   [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
   stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
   stripe=$(( ($SD_ERASE_SIZE_MB * 1024) / $SD_BLOCK_SIZE_KB ))
-  $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
-    -E stride=$stride,stripe-width=$stripe "${device}${part}1"
+  lsblkdev=($(lsblk -prno name,pkname,partlabel | grep root-bpir64-${ATFDEVICE}))
+  if [ ! -z $lsblkdev ]; then
+    mountdev=${lsblkdev[0]}
+    $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
+                    -E stride=$stride,stripe-width=$stripe "${mountdev}"
+  fi
   $sudo sync
   $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
 }
@@ -196,12 +185,20 @@ else
   exec 2> >(tee build-error.log) # No -i, work better with git clone? fixed with nopager?
 fi
 
+if [ "$(tr -d '\0' 2>/dev/null </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
+  echo "Not running on Bananapi BPI-R64"
+  formatpattern="^sd"
+  bpir64="false"
+else
+  echo "Running on Bananapi BPI-R64"
+  formatpattern="^mmc"
+  GCC=""
+  bpir64="true"
+fi
 if [ $ATFDEVICE = "emmc" ];then
   ubootdevnr=0
-  mmc_boot=$EMMC_BOOT
 else
   ubootdevnr=1
-  mmc_boot=$SDMMC_BOOT
 fi
 loopdev=""
 # lsblk -prno name,partlabel | grep root-bpir64-sdmmc
@@ -245,13 +242,6 @@ if [ ! -z $rootfsdir ]; then
               -o exec,dev,noatime,nodiratime
 fi
 
-if [ "$(tr -d '\0' 2>/dev/null </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
-  echo "Not running on Bananapi BPI-R64"
-else
-  echo "Running on Bananapi BPI-R64"
-  gcc=""
-fi
-
 [ ${KERNELVERSION:0:1} == "v" ] && kernelversion="${KERNELVERSION:1}" || kernelversion=$KERNELVERSION
 schroot="$sudo LC_ALL=C LANGUAGE=C LANG=C chroot $rootfsdir"
 [ -z $SRC ] && src=$rootfsdir/usr/src || src=$SRC
@@ -283,7 +273,7 @@ fi
 if [ "$a" = true ]; then
   $sudo apt-get install --yes git wget build-essential flex bison gcc-aarch64-linux-gnu \
                               u-boot-tools libncurses-dev libssl-dev zerofree symlinks
-  if [ -z $rootfsdir ]; then
+  if [ $bpir64 == "true" ]; then
     $sudo apt-get install --yes bc ca-certificates  # install these when running on R64
   else
     $sudo apt-get install --yes gzip debootstrap qemu-user-static libc6:i386 
@@ -307,7 +297,7 @@ else
     exit
   fi
 fi
-[ ! -z $rootfsdir ] && crossc="CROSS_COMPILE="$gccpath"aarch64-linux-gnu-" || crossc=""
+[ $bpir64 != "true" ] && crossc="CROSS_COMPILE="$gccpath"aarch64-linux-gnu-" || crossc=""
 makej=-j$(grep ^processor /proc/cpuinfo  | wc -l)
 echo ROOTFSDIR: $rootfsdir
 echo CROSSC: $crossc
@@ -363,14 +353,20 @@ if [ "$b" = true ]; then
     $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $src/uboot
   fi
   for bp in ./uboot-$UBOOTBRANCH/*.bash ; do source $bp ; done
-  $sudo ARCH=arm64 $crossc make $makej --directory=$src/uboot mt7622_my_bpi_defconfig all
-  $sudo $crossc make $makej --directory=$src/atf PLAT=mt7622 BL33=$src/uboot/u-boot.bin \
-                     $ATFBUILDARGS BOOT_DEVICE=$ATFDEVICE all fip
-  $sudo dd of="${device}" if=/dev/zero bs=512 count=1
-  echo -en "${mmc_boot}" | sudo dd bs=1 of="${device}" seek=$(( 512 - $MMC_BOOT_LEN ))
+  ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot mt7622_my_bpi_defconfig all
+             $sudo make $makej $crossc --directory=$src/atf PLAT=mt7622 \
+             BL33=$src/uboot/u-boot.bin $ATFBUILDARGS BOOT_DEVICE=$ATFDEVICE all fip
+  make -j1 --directory=./tools/ clean all # -j1 so first clean then all
+  ./tools/echo-bpir64-mbr $ATFDEVICE $(( $BL2_START_KB * 2 )) $(( $BL2_SIZE_KB * 2 )) \
+                   | sudo dd of="${device}"
   $sudo dd of="${mountdev::-1}2" if=$src/atf/build/mt7622/release/fip.bin bs=512 # remove bs=512 ???
   $sudo dd of="${mountdev::-1}3" if=$src/atf/build/mt7622/release/bl2.img bs=512 # remove bs=512 ???
+  if [ -b ${device}"boot0" ]; then
+    force_ro="/sys/block/"${device/"/dev/"/}"boot0/force_ro"
+    echo FORCE=$force_ro
 
+#    echo 0 > 
+  fi
 fi
 
 ### KERNEL ###

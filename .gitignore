@@ -1,5 +1,6 @@
 /gcc/
 /src/
+/tools/echo-bpir64-mbr
 /*.diff
 /*.deb
 /*.img*
