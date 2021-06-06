@@ -366,11 +366,11 @@ if [ "$b" = true ]; then
   $sudo ARCH=arm64 $crossc make $makej --directory=$src/uboot mt7622_my_bpi_defconfig all
   $sudo $crossc make $makej --directory=$src/atf PLAT=mt7622 BL33=$src/uboot/u-boot.bin \
                      $ATFBUILDARGS BOOT_DEVICE=$ATFDEVICE all fip
-  [ "$USE_LOOPDEV" == true ] && part="p" || part=""
   $sudo dd of="${device}" if=/dev/zero bs=512 count=1
   echo -en "${mmc_boot}" | sudo dd bs=1 of="${device}" seek=$(( 512 - $MMC_BOOT_LEN ))
-  $sudo dd of="${device}${part}2" if=$src/atf/build/mt7622/release/fip.bin bs=512 # remove bs=512 ???
-  $sudo dd of="${device}${part}3" if=$src/atf/build/mt7622/release/bl2.img bs=512 # remove bs=512 ???
+  $sudo dd of="${mountdev::-1}2" if=$src/atf/build/mt7622/release/fip.bin bs=512 # remove bs=512 ???
+  $sudo dd of="${mountdev::-1}3" if=$src/atf/build/mt7622/release/bl2.img bs=512 # remove bs=512 ???
+
 fi
 
 ### KERNEL ###
