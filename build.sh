@@ -119,7 +119,6 @@ function formatsd {
     attachloopdev
     device=$loopdev
     IMAGE_SIZE_MB=""
-    part="p"
   else            
     readarray -t options < <(lsblk --nodeps -no name,serial,size \
                      | grep $formatpattern | grep -v 'boot0\|boot1\|boot2')
@@ -131,7 +130,6 @@ function formatsd {
       fi
     done    
     device="/dev/"${dev%% *}
-    part=""
     for PART in `df -k | awk '{ print $1 }' | grep "${device}"` ; do umount $PART; done
     $sudo parted -s "${device}" unit MiB print
     echo -e "\nAre you sure you want to format "$device"???" 
@@ -355,17 +353,22 @@ if [ "$b" = true ]; then
   for bp in ./uboot-$UBOOTBRANCH/*.bash ; do source $bp ; done
   ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot mt7622_my_bpi_defconfig all
              $sudo make $makej $crossc --directory=$src/atf PLAT=mt7622 \
-             BL33=$src/uboot/u-boot.bin $ATFBUILDARGS BOOT_DEVICE=$ATFDEVICE all fip
+             BL33=$src/uboot/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 \
+             MKIMAGE=$src/uboot/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip
   make -j1 --directory=./tools/ clean all # -j1 so first clean then all
   ./tools/echo-bpir64-mbr $ATFDEVICE $(( $BL2_START_KB * 2 )) $(( $BL2_SIZE_KB * 2 )) \
                    | sudo dd of="${device}"
-  $sudo dd of="${mountdev::-1}2" if=$src/atf/build/mt7622/release/fip.bin bs=512 # remove bs=512 ???
-  $sudo dd of="${mountdev::-1}3" if=$src/atf/build/mt7622/release/bl2.img bs=512 # remove bs=512 ???
-  if [ -b ${device}"boot0" ]; then
+  $sudo dd of="${mountdev::-1}2" if=/dev/zero 2>/dev/null
+  $sudo dd of="${mountdev::-1}2" if=$src/atf/build/mt7622/release/fip.bin
+  $sudo dd of="${mountdev::-1}3" if=/dev/zero 2>/dev/null
+  $sudo dd of="${mountdev::-1}3" if=$src/atf/build/mt7622/release/bl2.img
+  if [ -b ${device}"boot0" ] && [ $bpir64 == "true" ]; then
     force_ro="/sys/block/"${device/"/dev/"/}"boot0/force_ro"
     echo FORCE=$force_ro
-
-#    echo 0 > 
+#    echo 0 >$force_ro
+    $sudo dd of=${device}"boot0" if=/dev/zero 2>/dev/null
+    $sudo dd of=${device}"boot0" if=$src/atf/build/mt7622/release/bl2.img
+#    echo 1 >$force_ro
   fi
 fi
 
@@ -410,7 +413,9 @@ if [ "$k" = true ] ; then
   makeoptions="--directory="$kerneldir" LOCALVERSION="$KERNELLOCALVERSION" DEFAULT_HOSTNAME=R64UBUNTU ARCH=arm64 "$crossc" KCFLAGS=-w"
   outoftreeoptions=${makeoptions/--directory=/KDIR=}
   if [ "$p" = true ]; then
-    $sudo make $makeoptions clean scripts modules_prepare
+    $sudo make $makeoptions distclean scripts modules_prepare
+    (cd src/uboot; $sudo make distclean)
+    (cd src/atf;   $sudo make distclean)
     exit
   fi
   $sudo cp --remove-destination --dereference -v kernel-$kernelversion/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig
