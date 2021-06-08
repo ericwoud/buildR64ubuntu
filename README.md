@@ -67,7 +67,24 @@ When you need to build in-tree/out-of-tree kernel modules, first execute the fol
 ```
 ./build.sh -akp
 ```
-It helps set up the build scripts correctly (build tools as arm64 executable instead of x86 executable).
+It helps set up the build scripts correctly (build tools as arm64 executable instead of x86 executable). Also does 'make distclean' on all sources.
+
+## Build/Install emmc version
+
+When building on R64 (running on sd-card) start/re-enter a screen session with:
+```
+screen -R
+```
+Detach from the session if you want, with CTRL-A + D.
+
+Change ATFDEVICE=sdmmc in the script to emmc. Now format the emmc:
+```
+./build.sh -SD
+```
+
+Make sure your internet connection is working on the R64. Ping 8.8.8.8 should work. 
+
+Now build the whole image, same as before.
 
 
 ## Using port 5 of the dsa switch
@@ -102,7 +119,6 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 ## TODO:
 
 * Get FDB delete functions to work, see [vlan enabled bridge bug?](http://forum.banana-pi.org/t/vlan-enabled-bridge-bug/12254)
-* Check building emmc version. There is some functionality for it, but it is untested.
 * Implement 802.11k 802.11r 802.11v.
 * MyGica T230C2 DVB-T and DVB-C support.
 * Guest WIFI
@@ -114,6 +130,10 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 * Kernel v5.12
 * Much faster startup due to changing from ifupdown (/etc/network/interfaces)
   to systemd-networkd.service (/etc/systemd/network).
+* Build on R64
+* Build sdmmc and emmc version
+* Build/install emmc version when running on the sdmmc version.
+* Write to image file instead of sd-card. To examine the result, use GNOME Disks -> menu -> "Attach Disk Image"
 * Files copied from custom kernel and rootfs directory.
 * Enable custom services installed from custom/rootfs/etc/systemd/system
 * Optional scripts in the custom kernel and rootfs directory. Files with extention ".bash" 
@@ -136,7 +156,6 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 * Adding extra packages to install. See extrapackages= at top of build script.
 * Other variables to tweak also at top of build script. Try building a different release or kernel version.
 * Adding kernel options from custom script (see example T230C2)
-
 
 ## Acknowledgments
 

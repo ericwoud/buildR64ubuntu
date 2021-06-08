@@ -77,6 +77,7 @@ function unmountrootfs {
     $sudo sync
     echo Running exit function to clean up...
     $sudo sync
+    echo $(mountpoint $rootfsdir)
     while [[ $(mountpoint $rootfsdir) =~  (is a mountpoint) ]]; do
       echo "Unmounting...DO NOT REMOVE!"
       $sudo umount -R $rootfsdir
@@ -156,12 +157,15 @@ function formatsd {
   [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
   stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
   stripe=$(( ($SD_ERASE_SIZE_MB * 1024) / $SD_BLOCK_SIZE_KB ))
-  lsblkdev=($(lsblk -prno name,pkname,partlabel | grep root-bpir64-${ATFDEVICE}))
-  if [ ! -z $lsblkdev ]; then
-    mountdev=${lsblkdev[0]}
-    $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
-                    -E stride=$stride,stripe-width=$stripe "${mountdev}"
-  fi
+  lsblkdev=""
+  while [ -z $lsblkdev ]; do
+    lsblkdev=($(lsblk -prno name,pkname,partlabel | grep root-bpir64-${ATFDEVICE}))
+    sleep 0.1
+  done
+  mountdev=${lsblkdev[0]}
+  echo test $mountdev
+  $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
+                  -E stride=$stride,stripe-width=$stripe "${mountdev}"
   $sudo sync
   $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
 }
@@ -183,6 +187,7 @@ else
   exec 2> >(tee build-error.log) # No -i, work better with git clone? fixed with nopager?
 fi
 
+echo "Target device="$ATFDEVICE
 if [ "$(tr -d '\0' 2>/dev/null </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
   echo "Not running on Bananapi BPI-R64"
   formatpattern="^sd"
@@ -221,7 +226,7 @@ if [ "$USE_LOOPDEV" == true ]; then
 else
   if [ "$S" = true ] && [ "$D" = true ]; then formatsd; exit; fi
   if [ -z $mountdev ]; then
-    echo "Not inserted!"
+    echo "Not inserted! (Maybe not matching the target device on the card)"
     exit
   fi
   rootdev=$(lsblk -pilno name,type,mountpoint | grep -G 'part /$')
@@ -245,7 +250,7 @@ schroot="$sudo LC_ALL=C LANGUAGE=C LANG=C chroot $rootfsdir"
 [ -z $SRC ] && src=$rootfsdir/usr/src || src=$SRC
 [ -z $rootfsdir ] && src="/usr/src"
 kerneldir=$src/linux-headers-$kernelversion
-echo OPTIONS: rootfs=$r kernel=$k tar=$t usb=$u apt=$a 
+echo OPTIONS: rootfs=$r boot=$b kernel=$k tar=$t apt=$a 
 if [ "$K" = true ] ; then
   echo Removing kernelsource...
   $sudo rm -rf $kerneldir
@@ -261,8 +266,8 @@ if [ "$T" = true ] ; then
 fi
 if [ "$B" = true ] ; then
   echo Removing boot...
-  $sudo rm -rf $src/uboot
-  $sudo rm -rf $src/atf
+  $sudo rm -rf $src/uboot-$UBOOTBRANCH
+  $sudo rm -rf $src/atf-$ATFBRANCH
 fi
 if [ "$F" = true ] ; then
   echo Removing firmware...
@@ -272,7 +277,7 @@ if [ "$a" = true ]; then
   $sudo apt-get install --yes git wget build-essential flex bison gcc-aarch64-linux-gnu \
                               u-boot-tools libncurses-dev libssl-dev zerofree symlinks
   if [ $bpir64 == "true" ]; then
-    $sudo apt-get install --yes bc ca-certificates  # install these when running on R64
+    $sudo apt-get install --yes bc ca-certificates mmc-utils # install these when running on R64
   else
     $sudo apt-get install --yes gzip debootstrap qemu-user-static libc6:i386 
     gccname=$(basename $GCC)
@@ -297,8 +302,11 @@ else
 fi
 [ $bpir64 != "true" ] && crossc="CROSS_COMPILE="$gccpath"aarch64-linux-gnu-" || crossc=""
 makej=-j$(grep ^processor /proc/cpuinfo  | wc -l)
-echo ROOTFSDIR: $rootfsdir
-echo CROSSC: $crossc
+echo "Rootfsdir="$rootfsdir
+echo "Crossc="$crossc
+echo "Device="$device
+echo "Mountdev="$mountdev
+echo "Makej="$makej
 
 ### ROOTFS ###
 if [ "$r" = true ]; then
@@ -337,6 +345,7 @@ if [ "$r" = true ]; then
   $sudo cp -rfv --no-dereference kernel-* $rootfsdir/root/buildR64ubuntu/
   $sudo cp -rfv --no-dereference rootfs-* $rootfsdir/root/buildR64ubuntu/
   $sudo cp -rfv --no-dereference uboot-*  $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference atf-*    $rootfsdir/root/buildR64ubuntu/
   $sudo cp -fv build.sh $rootfsdir/root/buildR64ubuntu/
 fi
 
@@ -344,31 +353,35 @@ fi
 if [ "$b" = true ]; then
   $sudo mkdir -p $src/
   $sudo mkdir -p $rootfsdir/boot/
-  if [ ! -d "$src/atf" ]; then
-    $sudo git --no-pager clone --branch $ATFBRANCH --depth 1 $ATFGIT $src/atf
+  if [ ! -d "$src/atf-$ATFBRANCH" ]; then
+    $sudo git --no-pager clone --branch $ATFBRANCH --depth 1 $ATFGIT $src/atf-$ATFBRANCH
   fi
-  if [ ! -d "$src/uboot" ]; then
-    $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $src/uboot
+  if [ ! -d "$src/uboot-$UBOOTBRANCH" ]; then
+    $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $src/uboot-$UBOOTBRANCH
   fi
+  for bp in ./atf-$ATFBRANCH/*.bash ;     do source $bp ; done
   for bp in ./uboot-$UBOOTBRANCH/*.bash ; do source $bp ; done
-  ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot mt7622_my_bpi_defconfig all
-             $sudo make $makej $crossc --directory=$src/atf PLAT=mt7622 \
-             BL33=$src/uboot/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 \
-             MKIMAGE=$src/uboot/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip
+  for bp in ./atf-$ATFBRANCH/*.patch;     do echo $bp ; $sudo patch -d $src/atf-$ATFBRANCH      -p1 -N -r - < $bp ; done
+  for bp in ./uboot-$UBOOTBRANCH/*.patch; do echo $bp ; $sudo patch -d  $src/uboot-$UBOOTBRANCH -p1 -N -r - < $bp ; done
+  ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig all
+             $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
+             BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 \
+             MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip #USE_MKIMAGE=1
   make -j1 --directory=./tools/ clean all # -j1 so first clean then all
   ./tools/echo-bpir64-mbr $ATFDEVICE $(( $BL2_START_KB * 2 )) $(( $BL2_SIZE_KB * 2 )) \
                    | sudo dd of="${device}"
   $sudo dd of="${mountdev::-1}2" if=/dev/zero 2>/dev/null
-  $sudo dd of="${mountdev::-1}2" if=$src/atf/build/mt7622/release/fip.bin
+  $sudo dd of="${mountdev::-1}2" if=$src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
   $sudo dd of="${mountdev::-1}3" if=/dev/zero 2>/dev/null
-  $sudo dd of="${mountdev::-1}3" if=$src/atf/build/mt7622/release/bl2.img
+  $sudo dd of="${mountdev::-1}3" if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
   if [ -b ${device}"boot0" ] && [ $bpir64 == "true" ]; then
     force_ro="/sys/block/"${device/"/dev/"/}"boot0/force_ro"
     echo FORCE=$force_ro
-#    echo 0 >$force_ro
+    echo 0 >$force_ro
     $sudo dd of=${device}"boot0" if=/dev/zero 2>/dev/null
-    $sudo dd of=${device}"boot0" if=$src/atf/build/mt7622/release/bl2.img
-#    echo 1 >$force_ro
+    $sudo dd of=${device}"boot0" if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
+    echo 1 >$force_ro
+    $sudo mmc bootpart enable 1 1 ${device}
   fi
 fi
 
@@ -380,7 +393,7 @@ if [ "$k" = true ] ; then
   fi
   [ -d $src ] || $sudo mkdir -p $src
   kerneldir=$(realpath $kerneldir)
-  echo KERNELDIR: $kerneldir
+  echo "Kerneldir="$kerneldir
   if [ ! -d "$kerneldir" ]; then
     if [ ! -f "kernel.$kernelversion.tar.gz" ]; then
       if [ ${KERNEL: -4} == ".git" ]; then
@@ -414,8 +427,8 @@ if [ "$k" = true ] ; then
   outoftreeoptions=${makeoptions/--directory=/KDIR=}
   if [ "$p" = true ]; then
     $sudo make $makeoptions distclean scripts modules_prepare
-    (cd src/uboot; $sudo make distclean)
-    (cd src/atf;   $sudo make distclean)
+    (cd src/uboot-$UBOOTBRANCH; $sudo make distclean)
+    (cd src/atf-$ATFBRANCH;     $sudo make distclean)
     exit
   fi
   $sudo cp --remove-destination --dereference -v kernel-$kernelversion/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig

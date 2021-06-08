@@ -1,7 +1,9 @@
 #!/bin/bash
 
-$sudo cp -f $src/uboot/configs/mt7622_rfb_defconfig $src/uboot/configs/mt7622_my_bpi_defconfig
-$sudo cat <<EOT | $sudo tee -a $src/uboot/configs/mt7622_my_bpi_defconfig
+$sudo cp -f $src/uboot-$UBOOTBRANCH/configs/mt7622_rfb_defconfig \
+            $src/uboot-$UBOOTBRANCH/configs/mt7622_my_bpi_defconfig
+$sudo cat <<EOT | $sudo tee -a \
+            $src/uboot-$UBOOTBRANCH/configs/mt7622_my_bpi_defconfig
 CONFIG_DEFAULT_DEVICE_TREE="$UBOOTDTB"
 CONFIG_DEFAULT_FDT_FILE="$UBOOTDTB"
 CONFIG_CMD_EXT4=y
