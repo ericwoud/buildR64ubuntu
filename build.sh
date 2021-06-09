@@ -68,7 +68,7 @@ NEEDEDPACKAGES="locales,hostapd,openssh-server,crda,resolvconf,iproute2,nftables
 EXTRAPACKAGES="vim,dbus,screen"      # Extra packages installed in rootfs, comma separated list, no spaces
 
 SETUP="RT"   # Setup as RouTer
-#SETUP="AP"  # Setup as Accass Point
+#SETUP="AP"  # Setup as Access Point
 
 LC="en_US.utf8"                      # Locale
 TIMEZONE="Europe/Paris"              # Timezone
@@ -170,6 +170,9 @@ function formatsd {
   $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
                   -E stride=$stride,stripe-width=$stripe "${mountdev}"
   $sudo sync
+  if [ -b ${device}"boot0" ] && [ $bpir64 == "true" ]; then
+    $sudo mmc bootpart enable 1 1 ${device}
+  fi
   $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
 }
 
@@ -385,7 +388,6 @@ if [ "$b" = true ]; then
     $sudo dd of=${device}"boot0" if=/dev/zero 2>/dev/null
     $sudo dd of=${device}"boot0" if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
     echo 1 >$force_ro
-    $sudo mmc bootpart enable 1 1 ${device}
   fi
 fi
 
