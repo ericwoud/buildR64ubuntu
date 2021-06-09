@@ -67,6 +67,9 @@ RELEASE="focal"                                         # Ubuntu version
 NEEDEDPACKAGES="locales,hostapd,openssh-server,crda,resolvconf,iproute2,nftables,isc-dhcp-server"
 EXTRAPACKAGES="vim,dbus,screen"      # Extra packages installed in rootfs, comma separated list, no spaces
 
+SETUP="RT"   # Setup as RouTer
+#SETUP="AP"  # Setup as Accass Point
+
 LC="en_US.utf8"                      # Locale
 TIMEZONE="Europe/Paris"              # Timezone
 KEYBOARD="us"                        # Keyboard
@@ -273,6 +276,7 @@ if [ "$F" = true ] ; then
   echo Removing firmware...
   $sudo rm -rf $rootfsdir/lib/firmware/mediatek
 fi
+$sudo rmdir --ignore-fail-on-non-empty -p $rootfsdir/usr/src
 if [ "$a" = true ]; then
   $sudo apt-get install --yes git wget build-essential flex bison gcc-aarch64-linux-gnu \
                               u-boot-tools libncurses-dev libssl-dev zerofree symlinks

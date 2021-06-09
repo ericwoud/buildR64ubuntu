@@ -1,6 +1,10 @@
 #!/bin/bash
-$schroot systemctl disenable isc-dhcp-server.service
-$schroot systemctl enable isc-dhcp-server.service
+if [ $SETUP == "RT" ];then
+  $schroot systemctl disable isc-dhcp-server.service
+  $schroot systemctl enable isc-dhcp-server.service
+else
+  $schroot systemctl disable isc-dhcp-server.service
+fi
 $sudo cp --no-clobber $rootfsdir/etc/dhcp/dhcpd.conf $rootfsdir/etc/dhcp/dhcpd-orig.conf
 $sudo cp              $rootfsdir/etc/dhcp/dhcpd-orig.conf $rootfsdir/etc/dhcp/dhcpd.conf
 $sudo cat <<EOT | $sudo tee -a $rootfsdir/etc/dhcp/dhcpd.conf
