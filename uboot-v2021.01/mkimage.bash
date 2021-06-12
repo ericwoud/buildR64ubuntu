@@ -9,7 +9,7 @@ mkipatches="080-mtk_image-add-support-for-booting-ARM64-images.patch \
 mkihb="f36990eae77c3a22842a2c418378c5dd40dec366"
 
 for filename in $mkipatches; do
-  wget -nv -O /dev/stdout $mkipatchgit/$filename";hb="$mkihb | $sudo patch -d $src/uboot-$UBOOTBRANCH -p1
+  wget -nv -O /dev/stdout $mkipatchgit/$filename";hb="$mkihb | $sudo patch -d $src/uboot-$UBOOTBRANCH -p1 -N -r -
 done
 
 

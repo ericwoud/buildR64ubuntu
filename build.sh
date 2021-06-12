@@ -6,7 +6,8 @@ GCC=""   # use standard ubuntu gcc version
 #GCC="https://releases.linaro.org/components/toolchain/binaries/latest-7/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz"
 
 SRC=""                 # Installs source in /usr/src of sd-card/image
-#SRC="./src/"          # Installs source in same folder as build.sh
+#SRC="./src"           # Installs source in same folder as build.sh
+#SRC="/usr/src"        # When running on sd-card, use the same source to build emmc 
 
 #KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
 KERNEL="https://github.com/torvalds/linux.git"
@@ -37,7 +38,7 @@ UBOOTBRANCH="v2021.01"
 # Uncomment if you do not want to use a SD card, but a loop-device instead.
 #USE_LOOPDEV="true"          # Remove SD card, because of same label
 
-IMAGE_FILE="./my-bpir64.img"
+IMAGE_FILE="./my-bpir64-"$ATFDEVICE".img"
 
 # https://github.com/bradfa/flashbench.git, running multiple times:
 # sudo ./flashbench -a --count=64 --blocksize=1024 /dev/sda
@@ -53,8 +54,7 @@ ROOTFS_LABEL="BPI-ROOT"
 
 IMAGE_SIZE_MB=7400                # Must be multiple of SD_ERASE_SIZE_MB !
 #IMAGE_SIZE_MB=""                 # Fill until end of card. Cannot use with image creaion.
-BL2_START_KB=512
-BL2_SIZE_KB=512
+BL2_END_KB=1024
 MINIMAL_SIZE_FIP_MB=3
 
 DEBOOTSTR_SOURCE="http://ports.ubuntu.com/ubuntu-ports" # Ubuntu
@@ -140,7 +140,7 @@ function formatsd {
     read -p "Type <format> to format: " prompt
     [[ $prompt != "format" ]] && exit
   fi
-  minimalrootstart=$(( $BL2_START_KB + $BL2_SIZE_KB + ($MINIMAL_SIZE_FIP_MB * 1024) ))
+  minimalrootstart=$(( $BL2_END_KB + ($MINIMAL_SIZE_FIP_MB * 1024) ))
   rootstart=0
   while [[ $rootstart -lt $minimalrootstart ]]; do 
     rootstart=$(( $rootstart + ($SD_ERASE_SIZE_MB * 1024) ))
@@ -149,9 +149,9 @@ function formatsd {
   $sudo dd of="${device}" if=/dev/zero bs=1024 count=$rootstart
   $sudo parted -s -- "${device}" unit kiB \
     mklabel gpt \
-    mkpart primary ext4 $rootstart                                       $rootend \
-    mkpart primary ext2 $(( $BL2_START_KB + $BL2_SIZE_KB ))            $rootstart \
-    mkpart primary ext2 $BL2_START_KB         $(( $BL2_START_KB + $BL2_SIZE_KB )) \
+    mkpart primary ext4 $rootstart       $rootend \
+    mkpart primary ext2 $BL2_END_KB    $rootstart \
+    mkpart primary ext2 0% $BL2_END_KB \
     name 1 root-bpir64-${ATFDEVICE} \
     name 2 fip \
     name 3 bl2 \
@@ -166,12 +166,11 @@ function formatsd {
     sleep 0.1
   done
   mountdev=${lsblkdev[0]}
-  echo test $mountdev
   $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
                   -E stride=$stride,stripe-width=$stripe "${mountdev}"
   $sudo sync
   if [ -b ${device}"boot0" ] && [ $bpir64 == "true" ]; then
-    $sudo mmc bootpart enable 1 1 ${device}
+    $sudo mmc bootpart enable 7 1 ${device}
   fi
   $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
 }
@@ -209,6 +208,8 @@ if [ $ATFDEVICE = "emmc" ];then
 else
   ubootdevnr=1
 fi
+rootdev=$(lsblk -pilno name,type,mountpoint | grep -G 'part /$')
+rootdev=${rootdev%% *}
 loopdev=""
 # lsblk -prno name,partlabel | grep root-bpir64-sdmmc
 lsblkdev=($(lsblk -prno name,pkname,partlabel | grep root-bpir64-${ATFDEVICE}))
@@ -235,8 +236,6 @@ else
     echo "Not inserted! (Maybe not matching the target device on the card)"
     exit
   fi
-  rootdev=$(lsblk -pilno name,type,mountpoint | grep -G 'part /$')
-  rootdev=${rootdev%% *}
   if [ $rootdev == $mountdev ];then
     rootfsdir="" ; r="" ; R=""      # Protect root when running from it!
   else
@@ -253,7 +252,7 @@ fi
 
 [ ${KERNELVERSION:0:1} == "v" ] && kernelversion="${KERNELVERSION:1}" || kernelversion=$KERNELVERSION
 schroot="$sudo LC_ALL=C LANGUAGE=C LANG=C chroot $rootfsdir"
-[ -z $SRC ] && src=$rootfsdir/usr/src || src=$SRC
+[ -z $SRC ] && src=$rootfsdir/usr/src || src=$(realpath $SRC)
 [ -z $rootfsdir ] && src="/usr/src"
 kerneldir=$src/linux-headers-$kernelversion
 echo OPTIONS: rootfs=$r boot=$b kernel=$k tar=$t apt=$a 
@@ -310,6 +309,7 @@ fi
 [ $bpir64 != "true" ] && crossc="CROSS_COMPILE="$gccpath"aarch64-linux-gnu-" || crossc=""
 makej=-j$(grep ^processor /proc/cpuinfo  | wc -l)
 echo "Rootfsdir="$rootfsdir
+echo "Src="$src
 echo "Crossc="$crossc
 echo "Device="$device
 echo "Mountdev="$mountdev
@@ -358,6 +358,9 @@ fi
 
 ### BOOT ###
 if [ "$b" = true ]; then
+  mountdevname=${mountdev/"/dev/"/}
+  firstavailblock=$(cat "/sys/class/block/"${mountdevname::-1}3"/start")
+  echo $firstavailblock
   $sudo mkdir -p $src/
   $sudo mkdir -p $rootfsdir/boot/
   if [ ! -d "$src/atf-$ATFBRANCH" ]; then
@@ -371,24 +374,17 @@ if [ "$b" = true ]; then
   for bp in ./atf-$ATFBRANCH/*.patch;     do echo $bp ; $sudo patch -d $src/atf-$ATFBRANCH      -p1 -N -r - < $bp ; done
   for bp in ./uboot-$UBOOTBRANCH/*.patch; do echo $bp ; $sudo patch -d  $src/uboot-$UBOOTBRANCH -p1 -N -r - < $bp ; done
   ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig all
-             $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
-             BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 \
-             MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip #USE_MKIMAGE=1
+  $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
+             BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 DEVICE_HEADER_OFFSET=0 \
+             MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip
   make -j1 --directory=./tools/ clean all # -j1 so first clean then all
-  ./tools/echo-bpir64-mbr $ATFDEVICE $(( $BL2_START_KB * 2 )) $(( $BL2_SIZE_KB * 2 )) \
-                   | sudo dd of="${device}"
   $sudo dd of="${mountdev::-1}2" if=/dev/zero 2>/dev/null
   $sudo dd of="${mountdev::-1}2" if=$src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
   $sudo dd of="${mountdev::-1}3" if=/dev/zero 2>/dev/null
-  $sudo dd of="${mountdev::-1}3" if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
-  if [ -b ${device}"boot0" ] && [ $bpir64 == "true" ]; then
-    force_ro="/sys/block/"${device/"/dev/"/}"boot0/force_ro"
-    echo FORCE=$force_ro
-    echo 0 >$force_ro
-    $sudo dd of=${device}"boot0" if=/dev/zero 2>/dev/null
-    $sudo dd of=${device}"boot0" if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
-    echo 1 >$force_ro
-  fi
+  $sudo dd of="${device}" bs=1 count=440 \
+           if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
+  $sudo dd of="${mountdev::-1}3" skip=$firstavailblock \
+           if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
 fi
 
 ### KERNEL ###
