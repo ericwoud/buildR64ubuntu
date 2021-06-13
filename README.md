@@ -102,19 +102,17 @@ If you don't like this trick, then:
 * Remove 'aux' from 10-wan.network file.
 * Adjust nftables.conf as described in the file.
 
-## Setup as Access Point
 
-Work in progress...
+## Setup as Access Point
 
 When using a second or third R64ubuntu as Access Point, and connecting router-lan-port to AP-lan-port, do the following: 
 
+Change SETUP="RT" to SETUP="AP".
+
 Setup the lan ports which connect router and AP as lan-trunk port on both router and AP. 
 
-On the AP, (remove vet3/eth3 not yet), disable IpForwarding (br0.network), disable isc-dhcp-server. Add the gateway address on the bridge with the address of the router. Change ip address of brlan, stay in the same subnet. 
+Some DSA drivers have a problem with this setup, but some are recently fixed with a fix wireless roaming fix in the kernel. You will need very recent drivers on all routers/switches and access points on your network
 
-Most important: use a fix like [FDB Deamon](https://github.com/ericwoud/bridgefdbd) or [Mc Spoof](https://github.com/ericwoud/mcspoof). This is necessairy because there is a problem in the DSA driver.
-
-Note: at the moment bridgefdbd will not work because of an issue with deleting fdb entries in vlan enabled bridge.
 
 ## TODO:
 
@@ -131,6 +129,7 @@ Note: at the moment bridgefdbd will not work because of an issue with deleting f
 * Much faster startup due to changing from ifupdown (/etc/network/interfaces)
   to systemd-networkd.service (/etc/systemd/network).
 * Build on R64
+* New bootheader fix, no need for mmcblk0boot0, but still use GPT.
 * Build sdmmc and emmc version
 * Build/install emmc version when running on the sdmmc version.
 * Write to image file instead of sd-card. To examine the result, use GNOME Disks -> menu -> "Attach Disk Image"

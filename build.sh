@@ -149,8 +149,8 @@ function formatsd {
   $sudo dd of="${device}" if=/dev/zero bs=1024 count=$rootstart
   $sudo parted -s -- "${device}" unit kiB \
     mklabel gpt \
-    mkpart primary ext4 $rootstart       $rootend \
-    mkpart primary ext2 $BL2_END_KB    $rootstart \
+    mkpart primary ext4 $rootstart $rootend \
+    mkpart primary ext2 $BL2_END_KB $rootstart \
     mkpart primary ext2 0% $BL2_END_KB \
     name 1 root-bpir64-${ATFDEVICE} \
     name 2 fip \
@@ -211,7 +211,6 @@ fi
 rootdev=$(lsblk -pilno name,type,mountpoint | grep -G 'part /$')
 rootdev=${rootdev%% *}
 loopdev=""
-# lsblk -prno name,partlabel | grep root-bpir64-sdmmc
 lsblkdev=($(lsblk -prno name,pkname,partlabel | grep root-bpir64-${ATFDEVICE}))
 if [ ! -z $lsblkdev ]; then
   mountdev=${lsblkdev[0]}
@@ -308,6 +307,7 @@ else
 fi
 [ $bpir64 != "true" ] && crossc="CROSS_COMPILE="$gccpath"aarch64-linux-gnu-" || crossc=""
 makej=-j$(grep ^processor /proc/cpuinfo  | wc -l)
+echo "SETUP="$SETUP
 echo "Rootfsdir="$rootfsdir
 echo "Src="$src
 echo "Crossc="$crossc
@@ -369,6 +369,7 @@ if [ "$b" = true ]; then
   if [ ! -d "$src/uboot-$UBOOTBRANCH" ]; then
     $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $src/uboot-$UBOOTBRANCH
   fi
+  (cd src/atf-$ATFBRANCH; $sudo make distclean)
   for bp in ./atf-$ATFBRANCH/*.bash ;     do source $bp ; done
   for bp in ./uboot-$UBOOTBRANCH/*.bash ; do source $bp ; done
   for bp in ./atf-$ATFBRANCH/*.patch;     do echo $bp ; $sudo patch -d $src/atf-$ATFBRANCH      -p1 -N -r - < $bp ; done
@@ -430,7 +431,6 @@ if [ "$k" = true ] ; then
   if [ "$p" = true ]; then
     $sudo make $makeoptions distclean scripts modules_prepare
     (cd src/uboot-$UBOOTBRANCH; $sudo make distclean)
-    (cd src/atf-$ATFBRANCH;     $sudo make distclean)
     exit
   fi
   $sudo cp --remove-destination --dereference -v kernel-$kernelversion/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig
@@ -501,5 +501,4 @@ if [ "$c" = true ] && [[ $IMAGE_SIZE_MB != "" ]]; then
   fi
 fi
 exit
-
 
