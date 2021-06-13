@@ -344,7 +344,7 @@ if [ "$r" = true ]; then
   $sudo cp -r --remove-destination --dereference -v rootfs-$RELEASE/. $rootfsdir
   for bp in $rootfsdir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
   for bp in $rootfsdir/*.patch; do echo $bp ; $sudo patch -d $rootfsdir -p1 -N -r - < $bp ; $sudo rm -rf $bp ; done
-  [[ -d "rootfs-$RELEASE/etc/systemd/network" ]] && $schroot systemctl reenable systemd-networkd.service
+  [[ -d "$rootfsdir/etc/systemd/network" ]] && $schroot systemctl reenable systemd-networkd.service
   find -L "rootfs-$RELEASE/etc/systemd/system" -name "*.service"| while read service ; do
     $schroot systemctl reenable $(basename $service)
   done
