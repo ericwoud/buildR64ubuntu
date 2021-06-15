@@ -16,7 +16,7 @@ KERNELVERSION="v5.12"        # Kernel files in folder named 'kernel-5.12'
 
 KERNELLOCALVERSION="-0"      # Is added to kernelversion by make for name of modules dir.
 
-KERNELBOOTARGS="console=ttyS0,115200 rw rootwait ipp"
+KERNELBOOTARGS="console=ttyS0,115200 rw rootwait"
 
 KERNELDTB="mt7622-bananapi-bpi-r64"
 UBOOTDTB="mt7622-bananapi-bpi-r64"
@@ -46,13 +46,15 @@ IMAGE_FILE="./my-bpir64-"$ATFDEVICE".img"
 SD_BLOCK_SIZE_KB=8                   # in kilo bytes
 # When the SD card was brand new, formatted by the manufacturer, parted shows partition start at 4MiB
 # 1      4,00MiB  29872MiB  29868MiB  primary  fat32        lba
+# Also, once runnig on BPIR64 execute:
+# bc -l <<<"$(cat /sys/block/mmcblk1/device/preferred_erase_size) /1024 /1024"
 SD_ERASE_SIZE_MB=4                   # in Mega bytes
 
 ROOTFS_EXT4_OPTIONS=""
 #ROOTFS_EXT4_OPTIONS="-O ^has_journal"  # No journal is faster, but you can get errors after powerloss
 ROOTFS_LABEL="BPI-ROOT"
 
-IMAGE_SIZE_MB=7400                # Must be multiple of SD_ERASE_SIZE_MB !
+IMAGE_SIZE_MB=7456                # Must be multiple of SD_ERASE_SIZE_MB !
 #IMAGE_SIZE_MB=""                 # Fill until end of card. Cannot use with image creaion.
 BL2_END_KB=1024
 MINIMAL_SIZE_FIP_MB=3
@@ -65,7 +67,8 @@ RELEASE="focal"                                         # Ubuntu version
 #RELEASE="buster"                                       # Debian version
 
 NEEDEDPACKAGES="locales,hostapd,openssh-server,crda,resolvconf,iproute2,nftables,isc-dhcp-server"
-EXTRAPACKAGES="vim,dbus,screen"      # Extra packages installed in rootfs, comma separated list, no spaces
+# Extra packages installed in rootfs, comma separated list, no spaces
+EXTRAPACKAGES="vim,dbus,screen,mmc-utils"
 
 SETUP="RT"   # Setup as RouTer
 #SETUP="AP"  # Setup as Access Point
@@ -145,7 +148,7 @@ function formatsd {
   while [[ $rootstart -lt $minimalrootstart ]]; do 
     rootstart=$(( $rootstart + ($SD_ERASE_SIZE_MB * 1024) ))
   done
-  [ -z  $IMAGE_SIZE_MB ] && rootend="100%" || rootend=$(( $IMAGE_SIZE_MB * 1024 ))
+  [ -z  $IMAGE_SIZE_MB ] && rootend="100%" || rootend=$(( ($IMAGE_SIZE_MB * 1024) - 128 ))
   $sudo dd of="${device}" if=/dev/zero bs=1024 count=$rootstart
   $sudo parted -s -- "${device}" unit kiB \
     mklabel gpt \
@@ -242,7 +245,7 @@ else
     $sudo umount $mountdev
   fi
 fi
-
+sectorsize=$(cat /sys/block/${device/"/dev/"/}/queue/hw_sector_size)
 if [ ! -z $rootfsdir ]; then
   [ -d $rootfsdir ] || $sudo mkdir $rootfsdir
   $sudo mount --source $mountdev --target $rootfsdir -t ext4 \
@@ -282,7 +285,7 @@ if [ "$a" = true ]; then
   $sudo apt-get install --yes git wget build-essential flex bison gcc-aarch64-linux-gnu \
                               u-boot-tools libncurses-dev libssl-dev zerofree symlinks
   if [ $bpir64 == "true" ]; then
-    $sudo apt-get install --yes bc ca-certificates mmc-utils # install these when running on R64
+    $sudo apt-get install --yes bc ca-certificates parted # install these when running on R64
   else
     $sudo apt-get install --yes gzip debootstrap qemu-user-static libc6:i386 
     gccname=$(basename $GCC)
@@ -311,7 +314,7 @@ echo "SETUP="$SETUP
 echo "Rootfsdir="$rootfsdir
 echo "Src="$src
 echo "Crossc="$crossc
-echo "Device="$device
+echo "Device="$device"   sectorsize="$sectorsize
 echo "Mountdev="$mountdev
 echo "Makej="$makej
 
@@ -360,7 +363,6 @@ fi
 if [ "$b" = true ]; then
   mountdevname=${mountdev/"/dev/"/}
   firstavailblock=$(cat "/sys/class/block/"${mountdevname::-1}3"/start")
-  echo $firstavailblock
   $sudo mkdir -p $src/
   $sudo mkdir -p $rootfsdir/boot/
   if [ ! -d "$src/atf-$ATFBRANCH" ]; then
@@ -387,7 +389,6 @@ if [ "$b" = true ]; then
   $sudo dd of="${mountdev::-1}3" skip=$firstavailblock \
            if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
 fi
-
 ### KERNEL ###
 if [ "$k" = true ] ; then
   if [ ! -d "$rootfsdir/lib" ]; then
@@ -430,6 +431,7 @@ if [ "$k" = true ] ; then
   outoftreeoptions=${makeoptions/--directory=/KDIR=}
   if [ "$p" = true ]; then
     $sudo make $makeoptions distclean scripts modules_prepare
+    (cd src/atf-$ATFBRANCH; $sudo make distclean)
     (cd src/uboot-$UBOOTBRANCH; $sudo make distclean)
     exit
   fi
@@ -474,7 +476,7 @@ if [ "$k" = true ] ; then
   $sudo cp -af $kerneldir/uImage $rootfsdir/boot/$kernelrelease.uImage
   $sudo echo -e "image=boot/$kernelrelease.uImage\ndtb=boot/$kernelrelease.dtb" | \
              $sudo tee    $rootfsdir/boot/uEnv.txt
-  $sudo make $makeoptions modules_install INSTALL_MOD_PATH="../../.."
+  $sudo make $makeoptions modules_install INSTALL_MOD_PATH=$rootfsdir
   if [ $kerneldir/outoftree/* != "$kerneldir/outoftree/*" ]; then
     $sudo mkdir -p $rootfsdir/lib/modules/$kernelrelease/extra
     for module in $kerneldir/outoftree/*
@@ -484,8 +486,13 @@ if [ "$k" = true ] ; then
     done
   fi
   $sudo depmod -ab $rootfsdir/. $kernelrelease
-  $sudo ln -v --force --symbolic --relative --no-dereference $kerneldir $rootfsdir/lib/modules/$kernelrelease/build
-  $sudo ln -v --force --symbolic --relative --no-dereference $kerneldir $rootfsdir/lib/modules/$kernelrelease/source
+  if [ -z $SRC ]; then 
+    $sudo ln -v --force --symbolic --relative --no-dereference $kerneldir $rootfsdir/lib/modules/$kernelrelease/build
+    $sudo ln -v --force --symbolic --relative --no-dereference $kerneldir $rootfsdir/lib/modules/$kernelrelease/source
+  else
+    $sudo rm -vf rootfsdir/lib/modules/$kernelrelease/build
+    $sudo rm -vf rootfsdir/lib/modules/$kernelrelease/source
+  fi
 fi
 
 ### COMPRESS IMAGE FROM SD-CARD OR LOOP_DEV ###

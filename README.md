@@ -58,7 +58,7 @@ Insert the SD card,, powerup, connect to the R64 wireless, SSID: WIFI24, passwor
 ```
 ssh root@192.168.5.1
 ```
-IPforward is on, the system is setup as router. Also see https://github.com/ericwoud/bridgefdbd to make AP work nicely.
+IPforward is on, the system is setup as router.
 
 After this, you are on your own. It is supposed to be a minimal installation of Ubuntu.
 
@@ -68,6 +68,25 @@ When you need to build in-tree/out-of-tree kernel modules, first execute the fol
 ./build.sh -akp
 ```
 It helps set up the build scripts correctly (build tools as arm64 executable instead of x86 executable). Also does 'make distclean' on all sources.
+
+## Using pre-build images for a quick try-out
+
+On github you will find downloadable images at the release branches.
+
+Write the image file for sd-card to the appropriate device, MAKE SURE YOU HAVE THE CORRECT DEVICE!
+```
+xz -dcv ~/Downloads/imagename-sdmmc.img.xz | sudo dd of=/dev/sda
+```
+If you want, copy the imagename-emmc.img.xz image to the sd-card (mount with nautilus):
+```
+sudo cp ~/Downloads/imagename-emmc.img.xz /media/$USER/BPI-ROOT/root/
+```
+Boot from sd-card and log in through wifi, lan or serial. Then enable boot from mmcblk0 and write the image:
+```
+mmc bootpart enable 7 1 /dev/mmcblk0
+xz -dcv imagename-emmc.img.xz | dd of=/dev/mmcblk0
+```
+Remove sd-card and boot from emmc, or switch to bootswitch.
 
 ## Build/Install emmc version
 
@@ -109,7 +128,9 @@ When using a second or third R64ubuntu as Access Point, and connecting router-la
 
 Change SETUP="RT" to SETUP="AP".
 
-Setup the lan ports which connect router and AP as lan-trunk port on both router and AP. 
+The Access Point has network address 192.168.1.33.
+
+For vlan setup the lan ports which connect router and AP as lan-trunk port on both router and AP. 
 
 Some DSA drivers have a problem with this setup, but some are recently fixed with a fix wireless roaming fix in the kernel. You will need very recent drivers on all routers/switches and access points on your network
 
@@ -141,6 +162,7 @@ Some DSA drivers have a problem with this setup, but some are recently fixed wit
 * -a : Install necessairy packages.
 * -SD : Format SD card
 * -r : Build RootFS.
+* -b : Build Boot images.
 * -k : Build Kernel.
 * -c : Builds Compressed archive from SD-card or loop-device.
 * -t : Create Tar archives to save time next time building.
@@ -150,7 +172,7 @@ Some DSA drivers have a problem with this setup, but some are recently fixed wit
 * -K : Delete Kernel.
 * -F : Delete Firmware.
 * -T : Delete Tar archives
-* -R : Delete Boot sources.
+* -B : Delete Boot sources.
 * Default options when no options entered -brkta
 * Adding extra packages to install. See extrapackages= at top of build script.
 * Other variables to tweak also at top of build script. Try building a different release or kernel version.

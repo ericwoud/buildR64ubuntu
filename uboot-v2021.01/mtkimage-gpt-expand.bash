@@ -15,7 +15,7 @@ diff -NarU 6 a/tools/mtk_image.h b/tools/mtk_image.h
  	};
  
 -	uint8_t pad[0x200];
-+	uint8_t pad[ $(( $firstavailblock * 512 )) ];
++	uint8_t pad[ $(( $firstavailblock * $sectorsize )) ];
  };
  
  #define EMMC_BOOT_NAME		"EMMC_BOOT"
