@@ -86,7 +86,7 @@ Boot from sd-card and log in through wifi, lan or serial. Then enable boot from 
 mmc bootpart enable 7 1 /dev/mmcblk0
 xz -dcv imagename-emmc.img.xz | dd of=/dev/mmcblk0
 ```
-Remove sd-card and boot from emmc, or switch to bootswitch.
+Remove sd-card and boot from emmc, or switch bootswitch.
 
 ## Build/Install emmc version
 
@@ -155,7 +155,7 @@ Some DSA drivers have a problem with this setup, but some are recently fixed wit
 * Build/install emmc version when running on the sdmmc version.
 * Write to image file instead of sd-card. To examine the result, use GNOME Disks -> menu -> "Attach Disk Image"
 * Files copied from custom kernel and rootfs directory.
-* Enable custom services installed from custom/rootfs/etc/systemd/system
+* Enable custom services installed from rootfs-xxx/etc/systemd/system
 * Optional scripts in the custom kernel and rootfs directory. Files with extention ".bash" 
   Environment and variables from main script can be used.
 * Optional patches in the custom kernel and rootfs directory. Files with extention ".patch"
@@ -174,7 +174,7 @@ Some DSA drivers have a problem with this setup, but some are recently fixed wit
 * -T : Delete Tar archives
 * -B : Delete Boot sources.
 * Default options when no options entered -brkta
-* Adding extra packages to install. See extrapackages= at top of build script.
+* Adding extra packages to install. See EXTRAPACKAGES= at top of build script.
 * Other variables to tweak also at top of build script. Try building a different release or kernel version.
 * Adding kernel options from custom script (see example T230C2)
 

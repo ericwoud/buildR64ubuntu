@@ -54,10 +54,9 @@ ROOTFS_EXT4_OPTIONS=""
 #ROOTFS_EXT4_OPTIONS="-O ^has_journal"  # No journal is faster, but you can get errors after powerloss
 ROOTFS_LABEL="BPI-ROOT"
 
-IMAGE_SIZE_MB=7456                # Must be multiple of SD_ERASE_SIZE_MB !
-#IMAGE_SIZE_MB=""                 # Fill until end of card. Cannot use with image creaion.
-BL2_END_KB=1024
-MINIMAL_SIZE_FIP_MB=3
+IMAGE_SIZE_MB=7456                # Size of image
+BL2_END_KB=1024                   # End of bl2 partition
+MINIMAL_SIZE_FIP_MB=3             # Minimal size of fip partition
 
 DEBOOTSTR_SOURCE="http://ports.ubuntu.com/ubuntu-ports" # Ubuntu
 DEBOOTSTR_COMPNS="main,restricted,universe,multiverse"  # Ubuntu
@@ -125,7 +124,6 @@ function formatsd {
     dd if=/dev/zero of=$IMAGE_FILE bs=1M count=$IMAGE_SIZE_MB status=progress 
     attachloopdev
     device=$loopdev
-    IMAGE_SIZE_MB=""
   else            
     readarray -t options < <(lsblk --nodeps -no name,serial,size \
                      | grep $formatpattern | grep -v 'boot0\|boot1\|boot2')
@@ -148,11 +146,10 @@ function formatsd {
   while [[ $rootstart -lt $minimalrootstart ]]; do 
     rootstart=$(( $rootstart + ($SD_ERASE_SIZE_MB * 1024) ))
   done
-  [ -z  $IMAGE_SIZE_MB ] && rootend="100%" || rootend=$(( ($IMAGE_SIZE_MB * 1024) - 128 ))
   $sudo dd of="${device}" if=/dev/zero bs=1024 count=$rootstart
   $sudo parted -s -- "${device}" unit kiB \
     mklabel gpt \
-    mkpart primary ext4 $rootstart $rootend \
+    mkpart primary ext4 $rootstart 100% \
     mkpart primary ext2 $BL2_END_KB $rootstart \
     mkpart primary ext2 0% $BL2_END_KB \
     name 1 root-bpir64-${ATFDEVICE} \
@@ -191,9 +188,10 @@ $sudo true
 if  [ "$k" = true ] && [ "$m" = true ]; then
   echo "Kernel menuconfig only..."
 else
-  exec > >(tee -i build.log) # Needs -i for propper CTRL-C catch
-  exec 2> >(tee build-error.log) # No -i, work better with git clone? fixed with nopager?
+  exec > >(tee -i build.log)        # Needs -i for propper CTRL-C trap
+  exec 2> >(tee -i build-error.log) #### TEST with -i, fixed with nopager?
 fi
+restore_stderr="2>&0"
 
 echo "Target device="$ATFDEVICE
 if [ "$(tr -d '\0' 2>/dev/null </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
@@ -366,12 +364,14 @@ if [ "$b" = true ]; then
   $sudo mkdir -p $src/
   $sudo mkdir -p $rootfsdir/boot/
   if [ ! -d "$src/atf-$ATFBRANCH" ]; then
-    $sudo git --no-pager clone --branch $ATFBRANCH --depth 1 $ATFGIT $src/atf-$ATFBRANCH
+    $sudo git --no-pager clone --branch $ATFBRANCH --depth 1 $ATFGIT $src/atf-$ATFBRANCH 2>&0
+    [[ $? != 0 ]] && exit
   fi
   if [ ! -d "$src/uboot-$UBOOTBRANCH" ]; then
-    $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $src/uboot-$UBOOTBRANCH
+    $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $src/uboot-$UBOOTBRANCH 2>&0
+    [[ $? != 0 ]] && exit
   fi
-  (cd src/atf-$ATFBRANCH; $sudo make distclean)
+  sudo touch $src/atf-$ATFBRANCH/plat/mediatek/mt7622/platform.mk
   for bp in ./atf-$ATFBRANCH/*.bash ;     do source $bp ; done
   for bp in ./uboot-$UBOOTBRANCH/*.bash ; do source $bp ; done
   for bp in ./atf-$ATFBRANCH/*.patch;     do echo $bp ; $sudo patch -d $src/atf-$ATFBRANCH      -p1 -N -r - < $bp ; done
@@ -401,12 +401,14 @@ if [ "$k" = true ] ; then
   if [ ! -d "$kerneldir" ]; then
     if [ ! -f "kernel.$kernelversion.tar.gz" ]; then
       if [ ${KERNEL: -4} == ".git" ]; then
-        $sudo git --no-pager clone --branch $KERNELVERSION --depth 1 $KERNEL $kerneldir
+        $sudo git --no-pager clone --branch $KERNELVERSION --depth 1 $KERNEL $kerneldir 2>&0
+        [[ $? != 0 ]] && exit
       else
         gitbranch=$(wget -nv -qO- $KERNEL/$KERNELVERSION/HEADER.html | grep -m 1 git://)
         gitbranch=${gitbranch//&nbsp;/}
         gitbranch=(${gitbranch//<br>/})
-        $sudo git --no-pager clone --branch ${gitbranch[1]} --depth 1 ${gitbranch[0]} $kerneldir
+        $sudo git --no-pager clone --branch ${gitbranch[1]} --depth 1 ${gitbranch[0]} $kerneldir 2>&0
+        [[ $? != 0 ]] && exit
         $sudo rm -rf $kerneldir/.git
         sources=$(wget -nv -qO- $KERNEL/$KERNELVERSION/SOURCES) ; readarray -t sources <<<"$sources"
         if [ ! -z "${sources[0]}" ]; then # has SOURCES file
@@ -496,15 +498,14 @@ if [ "$k" = true ] ; then
 fi
 
 ### COMPRESS IMAGE FROM SD-CARD OR LOOP_DEV ###
-if [ "$c" = true ] && [[ $IMAGE_SIZE_MB != "" ]]; then
+if [ "$c" = true ]; then
   unmountrootfs
   $sudo zerofree -v $mountdev
   if [ "$USE_LOOPDEV" == true ]; then
     detachloopdev
-    echo "Creating image..."
-    xz --keep --force --verbose $IMAGE_FILE
+    xz --keep --force --verbose $IMAGE_FILE 2>&0
   else
-    $sudo dd bs=1M count=$IMAGE_SIZE_MB if="${device}" status=progress | xz >$IMAGE_FILE.xz
+    $sudo dd bs=1M if="${device}" status=progress | xz >$IMAGE_FILE.xz
   fi
 fi
 exit
