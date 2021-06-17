@@ -9,12 +9,12 @@ SRC=""                 # Installs source in /usr/src of sd-card/image
 #SRC="./src"           # Installs source in same folder as build.sh
 #SRC="/usr/src"        # When running on sd-card, use the same source to build emmc 
 
-KERNELVERSION="5.13-rc6"        # Custom Kernel files in folder named 'linux-5.12'
+KERNELVERSION="5.12.11"        # Custom Kernel files in folder named 'linux-5.12'
 
 #KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
 #KERNEL="https://github.com/torvalds/linux.git"
-#KERNEL="https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.12.11.tar.xz"
-KERNEL="https://git.kernel.org/torvalds/t/linux-$KERNELVERSION.tar.gz"
+KERNEL="https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-$KERNELVERSION.tar.xz"
+#KERNEL="https://git.kernel.org/torvalds/t/linux-$KERNELVERSION.tar.gz"
 
 KERNELLOCALVERSION="-0"      # Is added to KERNELVERSION by make for name of modules dir.
 
@@ -342,7 +342,7 @@ if [ "$r" = true ]; then
     fi
   fi
   echo root:$ROOTPWD | $schroot chpasswd 
-  symlinks -cr .
+  symlinks -cr rootfs-*/
   $sudo cp -r --remove-destination --dereference -v rootfs-$RELEASE/. $rootfsdir
   for bp in $rootfsdir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
   for bp in $rootfsdir/*.patch; do echo $bp ; $sudo patch -d $rootfsdir -p1 -N -r - < $bp ; $sudo rm -rf $bp ; done
@@ -405,6 +405,7 @@ if [ "$k" = true ] ; then
         $sudo git --no-pager clone --branch v$KERNELVERSION $KERNEL $kerneldir 2>&0
         [[ $? != 0 ]] && exit
       elif [ ${KERNEL: -7} == ".tar.xz" ] || [ ${KERNEL: -7} == ".tar.gz" ]; then
+        echo "Downloading $KERNEL..."
         wget -nv -N $KERNEL
       else # Ubuntu mainline
         gitbranch=$(wget -nv -qO- $KERNEL/v$KERNELVERSION/HEADER.html | grep -m 1 git://)
