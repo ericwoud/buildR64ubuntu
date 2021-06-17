@@ -9,12 +9,14 @@ SRC=""                 # Installs source in /usr/src of sd-card/image
 #SRC="./src"           # Installs source in same folder as build.sh
 #SRC="/usr/src"        # When running on sd-card, use the same source to build emmc 
 
+KERNELVERSION="5.13-rc6"        # Custom Kernel files in folder named 'linux-5.12'
+
 #KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
-KERNEL="https://github.com/torvalds/linux.git"
+#KERNEL="https://github.com/torvalds/linux.git"
+#KERNEL="https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.12.11.tar.xz"
+KERNEL="https://git.kernel.org/torvalds/t/linux-$KERNELVERSION.tar.gz"
 
-KERNELVERSION="v5.12"        # Kernel files in folder named 'kernel-5.12'
-
-KERNELLOCALVERSION="-0"      # Is added to kernelversion by make for name of modules dir.
+KERNELLOCALVERSION="-0"      # Is added to KERNELVERSION by make for name of modules dir.
 
 KERNELBOOTARGS="console=ttyS0,115200 rw rootwait"
 
@@ -189,7 +191,7 @@ if  [ "$k" = true ] && [ "$m" = true ]; then
   echo "Kernel menuconfig only..."
 else
   exec > >(tee -i build.log)        # Needs -i for propper CTRL-C trap
-  exec 2> >(tee -i build-error.log) #### TEST with -i, fixed with nopager?
+  exec 2> >(tee build-error.log)    # Without -i, git hangs?
 fi
 restore_stderr="2>&0"
 
@@ -250,11 +252,10 @@ if [ ! -z $rootfsdir ]; then
               -o exec,dev,noatime,nodiratime
 fi
 
-[ ${KERNELVERSION:0:1} == "v" ] && kernelversion="${KERNELVERSION:1}" || kernelversion=$KERNELVERSION
 schroot="$sudo LC_ALL=C LANGUAGE=C LANG=C chroot $rootfsdir"
 [ -z $SRC ] && src=$rootfsdir/usr/src || src=$(realpath $SRC)
 [ -z $rootfsdir ] && src="/usr/src"
-kerneldir=$src/linux-headers-$kernelversion
+kerneldir=$src/linux-$KERNELVERSION
 echo OPTIONS: rootfs=$r boot=$b kernel=$k tar=$t apt=$a 
 if [ "$K" = true ] ; then
   echo Removing kernelsource...
@@ -267,7 +268,7 @@ if [ "$R" = true ] ; then
 fi
 if [ "$T" = true ] ; then
   echo Removing .tar...
-  rm -f rootfs.$RELEASE.tar.bz2 kernel.$kernelversion.tar.gz
+  rm -f rootfs.$RELEASE.tar.bz2 linux-$KERNELVERSION.tar.xz
 fi
 if [ "$B" = true ] ; then
   echo Removing boot...
@@ -350,10 +351,10 @@ if [ "$r" = true ]; then
     $schroot systemctl reenable $(basename $service)
   done
   $sudo mkdir -p $rootfsdir/root/buildR64ubuntu
-  $sudo cp -rfv --no-dereference kernel-* $rootfsdir/root/buildR64ubuntu/
-  $sudo cp -rfv --no-dereference rootfs-* $rootfsdir/root/buildR64ubuntu/
-  $sudo cp -rfv --no-dereference uboot-*  $rootfsdir/root/buildR64ubuntu/
-  $sudo cp -rfv --no-dereference atf-*    $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference linux-*/ $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference rootfs-*/ $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference uboot-*/  $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference atf-*/    $rootfsdir/root/buildR64ubuntu/
   $sudo cp -fv build.sh $rootfsdir/root/buildR64ubuntu/
 fi
 
@@ -399,34 +400,41 @@ if [ "$k" = true ] ; then
   kerneldir=$(realpath $kerneldir)
   echo "Kerneldir="$kerneldir
   if [ ! -d "$kerneldir" ]; then
-    if [ ! -f "kernel.$kernelversion.tar.gz" ]; then
+    if [ ! -f "linux-$KERNELVERSION.tar.xz" ] && [ ! -f "linux-$KERNELVERSION.tar.gz" ]; then
       if [ ${KERNEL: -4} == ".git" ]; then
-        $sudo git --no-pager clone --branch $KERNELVERSION --depth 1 $KERNEL $kerneldir 2>&0
+        $sudo git --no-pager clone --branch v$KERNELVERSION $KERNEL $kerneldir 2>&0
         [[ $? != 0 ]] && exit
-      else
-        gitbranch=$(wget -nv -qO- $KERNEL/$KERNELVERSION/HEADER.html | grep -m 1 git://)
+      elif [ ${KERNEL: -7} == ".tar.xz" ] || [ ${KERNEL: -7} == ".tar.gz" ]; then
+        wget -nv -N $KERNEL
+      else # Ubuntu mainline
+        gitbranch=$(wget -nv -qO- $KERNEL/v$KERNELVERSION/HEADER.html | grep -m 1 git://)
         gitbranch=${gitbranch//&nbsp;/}
         gitbranch=(${gitbranch//<br>/})
         $sudo git --no-pager clone --branch ${gitbranch[1]} --depth 1 ${gitbranch[0]} $kerneldir 2>&0
         [[ $? != 0 ]] && exit
         $sudo rm -rf $kerneldir/.git
-        sources=$(wget -nv -qO- $KERNEL/$KERNELVERSION/SOURCES) ; readarray -t sources <<<"$sources"
+        sources=$(wget -nv -qO- $KERNEL/v$KERNELVERSION/SOURCES) ; readarray -t sources <<<"$sources"
         if [ ! -z "${sources[0]}" ]; then # has SOURCES file
           src=1
           while [ $src -lt ${#sources[@]} ]; do
-            wget -nv -O /dev/stdout $KERNEL/$KERNELVERSION/${sources[$src]} | $sudo patch -d $kerneldir -p1
+            wget -nv -O /dev/stdout $KERNEL/v$KERNELVERSION/${sources[$src]} | $sudo patch -d $kerneldir -p1
             let src++
           done
         fi
       fi
-      if [ "$t" = true ]; then
-        echo "Creating kernel.tar..."
-        tar -czf kernel.$kernelversion.tar.gz -C $kerneldir .
+      if [ "$t" = true ] && [ ! -f "linux-$KERNELVERSION.tar.xz" ] && [ ! -f "linux-$KERNELVERSION.tar.gz" ]; then
+        echo "Creating linux-tar..."
+        tar -cJf linux-$KERNELVERSION.tar.xz -C $kerneldir/.. $(basename $kerneldir)
       fi
-    else
+    fi
+    if [ -f "linux-$KERNELVERSION.tar.xz" ]; then
       $sudo mkdir -p $kerneldir
-      echo "Extracting kernel.tar..."
-      $sudo tar -xzf kernel.$kernelversion.tar.gz -C $kerneldir
+      echo "Extracting linux-tar.xz..."
+      $sudo tar -xf linux-$KERNELVERSION.tar.xz -C $kerneldir/..
+    elif [ -f "linux-$KERNELVERSION.tar.gz" ]; then
+      $sudo mkdir -p $kerneldir
+      echo "Extracting linux-tar.gz..."
+      $sudo tar -xf linux-$KERNELVERSION.tar.gz -C $kerneldir/..
     fi
   fi  
   makeoptions="--directory="$kerneldir" LOCALVERSION="$KERNELLOCALVERSION" DEFAULT_HOSTNAME=R64UBUNTU ARCH=arm64 "$crossc" KCFLAGS=-w"
@@ -437,7 +445,7 @@ if [ "$k" = true ] ; then
     (cd src/uboot-$UBOOTBRANCH; $sudo make distclean)
     exit
   fi
-  $sudo cp --remove-destination --dereference -v kernel-$kernelversion/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig
+  $sudo cp --remove-destination --dereference -v linux-$KERNELVERSION/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig
   $sudo make $makeoptions r64ubuntu_defconfig
   if [ "$m" = true ] ; then
     echo -e "\nSave altered config as '.config'.\n"
@@ -448,7 +456,7 @@ if [ "$k" = true ] ; then
     (cd $kerneldir; $sudo "ARCH=arm64" $format)
     read -p "Type <save> to save configuration permanently: " prompt
     if [[ $prompt == "save" ]]; then
-      cp --remove-destination -v $kerneldir/formatdef/defconfig kernel-$kernelversion/defconfig
+      cp --remove-destination -v $kerneldir/formatdef/defconfig linux-$KERNELVERSION/defconfig
     fi
     exit  
   fi  
@@ -461,7 +469,7 @@ if [ "$k" = true ] ; then
   $sudo cp --remove-destination -v $kerneldir/.config $kerneldir/before.config
   $sudo mkdir -p $kerneldir/outoftree
   symlinks -cr .
-  $sudo cp -r --remove-destination -v kernel-$kernelversion/. $kerneldir
+  $sudo cp -r --remove-destination -v linux-$KERNELVERSION/. $kerneldir
   for bp in $kerneldir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
   for bp in $kerneldir/*.patch; do echo $bp ; $sudo patch -d $kerneldir -p1 -N -r - < $bp ; $sudo rm -rf $bp ; done
   $sudo make $makeoptions KCONFIG_ALLCONFIG=.config allnoconfig # only add config entries added in diff.patch or script.bash
