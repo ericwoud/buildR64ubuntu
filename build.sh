@@ -193,7 +193,6 @@ else
   exec > >(tee -i build.log)        # Needs -i for propper CTRL-C trap
   exec 2> >(tee build-error.log)    # Without -i, git hangs?
 fi
-restore_stderr="2>&0"
 
 echo "Target device="$ATFDEVICE
 if [ "$(tr -d '\0' 2>/dev/null </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
@@ -277,7 +276,7 @@ if [ "$B" = true ] ; then
 fi
 if [ "$F" = true ] ; then
   echo Removing firmware...
-  $sudo rm -rf $rootfsdir/lib/firmware/mediatek
+  $sudo rm -rf $rootfsdir/lib/firmware
 fi
 $sudo rmdir --ignore-fail-on-non-empty -p $rootfsdir/usr/src
 if [ "$a" = true ]; then
@@ -390,6 +389,7 @@ if [ "$b" = true ]; then
   $sudo dd of="${mountdev::-1}3" skip=$firstavailblock \
            if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
 fi
+
 ### KERNEL ###
 if [ "$k" = true ] ; then
   if [ ! -d "$rootfsdir/lib" ]; then
@@ -402,7 +402,7 @@ if [ "$k" = true ] ; then
   if [ ! -d "$kerneldir" ]; then
     if [ ! -f "linux-$KERNELVERSION.tar.xz" ] && [ ! -f "linux-$KERNELVERSION.tar.gz" ]; then
       if [ ${KERNEL: -4} == ".git" ]; then
-        $sudo git --no-pager clone --branch v$KERNELVERSION $KERNEL $kerneldir 2>&0
+        $sudo git --no-pager clone git clone --depth 1 --branch v$KERNELVERSION $KERNEL $kerneldir 2>&0
         [[ $? != 0 ]] && exit
       elif [ ${KERNEL: -7} == ".tar.xz" ] || [ ${KERNEL: -7} == ".tar.gz" ]; then
         echo "Downloading $KERNEL..."
@@ -461,15 +461,10 @@ if [ "$k" = true ] ; then
     fi
     exit  
   fi  
-  if [ ! -d "$rootfsdir/lib/firmware/mediatek" ]; then
-    $sudo mkdir -p $rootfsdir/lib/firmware/mediatek
-    $sudo wget --no-verbose --recursive --level=1 --no-parent --no-directories --convert-links -erobots=off \
-     --directory-prefix=$rootfsdir/lib/firmware/mediatek --accept=.bin \
-      https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mediatek/ 
-  fi
   $sudo cp --remove-destination -v $kerneldir/.config $kerneldir/before.config
   $sudo mkdir -p $kerneldir/outoftree
-  symlinks -cr .
+  symlinks -cr linux-*/
+  symlinks -cr rootfs-*/
   $sudo cp -r --remove-destination -v linux-$KERNELVERSION/. $kerneldir
   for bp in $kerneldir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
   for bp in $kerneldir/*.patch; do echo $bp ; $sudo patch -d $kerneldir -p1 -N -r - < $bp ; $sudo rm -rf $bp ; done
