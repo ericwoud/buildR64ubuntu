@@ -1,22 +1,16 @@
-From 9e5fd975ecd3d401f525a5aad0f07f3713e28e3c Mon Sep 17 00:00:00 2001
+diff -Naur a/drivers/net/wireless/mediatek/mt76/eeprom.c b/drivers/net/wireless/mediatek/mt76/eeprom.c
 From: Frank Wunderlich <frank-w@public-files.de>
-Date: Wed, 16 Dec 2020 13:15:30 +0100
-Subject: [PATCH] mt76: allow loading eeprom from file
 
----
- drivers/net/wireless/mediatek/mt76/eeprom.c | 43 ++++++++++++++++++++-
- 1 file changed, 42 insertions(+), 1 deletion(-)
+Updated to kernel 5.14
 
-diff --git a/drivers/net/wireless/mediatek/mt76/eeprom.c b/drivers/net/wireless/mediatek/mt76/eeprom.c
-index 90278aeb67211..1b3f9db1ace4b 100644
 --- a/drivers/net/wireless/mediatek/mt76/eeprom.c
 +++ b/drivers/net/wireless/mediatek/mt76/eeprom.c
-@@ -9,6 +9,47 @@
+@@ -9,6 +9,48 @@
  #include <linux/etherdevice.h>
  #include "mt76.h"
  
 +static int
-+mt76_get_eeprom_file(struct mt76_dev *dev, int len)
++mt76_get_eeprom_file(struct mt76_dev *dev, void *eep, int offset, int len)
 +{
 +	char path[64]="";
 +	struct file *fp;
@@ -46,7 +40,7 @@ index 90278aeb67211..1b3f9db1ace4b 100644
 +		printk(KERN_ALERT "failed getting size of %s size:%lld \n",path,size);
 +		return -ENOENT;
 +	}
-+	ret = kernel_read(fp, dev->eeprom.data, len, &pos);
++	ret = kernel_read(fp, eep, len, &pos);
 +	if(ret < size){
 +		dev_info(dev->dev,"Load eeprom ERR, count %d byte (len:%d)\n",ret,len);
 +		return -ENOENT;
@@ -56,14 +50,16 @@ index 90278aeb67211..1b3f9db1ace4b 100644
 +
 +	return 0;
 +}
- static int
- mt76_get_of_eeprom(struct mt76_dev *dev, int len)
++
+ int mt76_get_of_eeprom(struct mt76_dev *dev, void *eep, int offset, int len)
  {
-@@ -119,6 +160,6 @@ mt76_eeprom_init(struct mt76_dev *dev, int len)
+ #if defined(CONFIG_OF) && defined(CONFIG_MTD)
+@@ -331,6 +373,7 @@
  	if (!dev->eeprom.data)
  		return -ENOMEM;
  
--	return !mt76_get_of_eeprom(dev, len);
-+	return (!mt76_get_eeprom_file(dev, len)) || (!mt76_get_of_eeprom(dev, len));
+-	return !mt76_get_of_eeprom(dev, dev->eeprom.data, 0, len);
++	return (!mt76_get_of_eeprom(dev, dev->eeprom.data, 0, len)) || 
++	     (!mt76_get_eeprom_file(dev, dev->eeprom.data, 0, len));
  }
  EXPORT_SYMBOL_GPL(mt76_eeprom_init);
