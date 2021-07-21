@@ -9,12 +9,13 @@ SRC=""                 # Installs source in /usr/src of sd-card/image
 #SRC="./src"           # Installs source in same folder as build.sh
 #SRC="/usr/src"        # When running on sd-card, use the same source to build emmc 
 
-KERNELVERSION="5.12.11"        # Custom Kernel files in folder named 'linux-5.12'
+KERNELVERSION="5.14-rc2"        # Custom Kernel files in folder named 'linux-5.12'
 
 #KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
 #KERNEL="https://github.com/torvalds/linux.git"
-KERNEL="https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-$KERNELVERSION.tar.xz"
+#KERNEL="https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-$KERNELVERSION.tar.xz"
 #KERNEL="https://git.kernel.org/torvalds/t/linux-$KERNELVERSION.tar.gz"
+KERNEL="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/linux-$KERNELVERSION.tar.gz"
 
 KERNELLOCALVERSION="-0"      # Is added to KERNELVERSION by make for name of modules dir.
 
@@ -441,9 +442,9 @@ if [ "$k" = true ] ; then
   makeoptions="--directory="$kerneldir" LOCALVERSION="$KERNELLOCALVERSION" DEFAULT_HOSTNAME=R64UBUNTU ARCH=arm64 "$crossc" KCFLAGS=-w"
   outoftreeoptions=${makeoptions/--directory=/KDIR=}
   if [ "$p" = true ]; then
-    $sudo make $makeoptions distclean scripts modules_prepare
-    (cd src/atf-$ATFBRANCH; $sudo make distclean)
-    (cd src/uboot-$UBOOTBRANCH; $sudo make distclean)
+    $sudo make $makeoptions scripts modules_prepare distclean
+    (cd $src/atf-$ATFBRANCH; $sudo make distclean)
+    (cd $src/uboot-$UBOOTBRANCH; $sudo make distclean)
     exit
   fi
   $sudo cp --remove-destination --dereference -v linux-$KERNELVERSION/defconfig $kerneldir/arch/arm64/configs/r64ubuntu_defconfig
