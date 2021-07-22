@@ -403,7 +403,8 @@ if [ "$k" = true ] ; then
   if [ ! -d "$kerneldir" ]; then
     if [ ! -f "linux-$KERNELVERSION.tar.xz" ] && [ ! -f "linux-$KERNELVERSION.tar.gz" ]; then
       if [ ${KERNEL: -4} == ".git" ]; then
-        $sudo git --no-pager clone git clone --depth 1 --branch v$KERNELVERSION $KERNEL $kerneldir 2>&0
+        [ $KERNELVERSION != "master" ] && branch="--branch v"$KERNELVERSION || branch=""
+        $sudo git --no-pager clone --depth 1 $branch $KERNEL $kerneldir 2>&0
         [[ $? != 0 ]] && exit
       elif [ ${KERNEL: -7} == ".tar.xz" ] || [ ${KERNEL: -7} == ".tar.gz" ]; then
         echo "Downloading $KERNEL..."
