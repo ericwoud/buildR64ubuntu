@@ -10,12 +10,14 @@ SRC=""                 # Installs source in /usr/src of sd-card/image
 #SRC="/usr/src"        # When running on sd-card, use the same source to build emmc 
 
 KERNELVERSION="5.14-rc2"        # Custom Kernel files in folder named 'linux-5.12'
+#KERNELVERSION="master"          # master (head) of git, name folder 'linux-master'
 
 #KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
 #KERNEL="https://github.com/torvalds/linux.git"
 #KERNEL="https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-$KERNELVERSION.tar.xz"
 #KERNEL="https://git.kernel.org/torvalds/t/linux-$KERNELVERSION.tar.gz"
 KERNEL="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/linux-$KERNELVERSION.tar.gz"
+#KERNEL="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git"
 
 KERNELLOCALVERSION="-0"      # Is added to KERNELVERSION by make for name of modules dir.
 
@@ -406,6 +408,7 @@ if [ "$k" = true ] ; then
         [ $KERNELVERSION != "master" ] && branch="--branch v"$KERNELVERSION || branch=""
         $sudo git --no-pager clone --depth 1 $branch $KERNEL $kerneldir 2>&0
         [[ $? != 0 ]] && exit
+        $sudo rm -rf $kerneldir/.git
       elif [ ${KERNEL: -7} == ".tar.xz" ] || [ ${KERNEL: -7} == ".tar.gz" ]; then
         echo "Downloading $KERNEL..."
         wget -nv -N $KERNEL
@@ -430,11 +433,11 @@ if [ "$k" = true ] ; then
         tar -cJf linux-$KERNELVERSION.tar.xz -C $kerneldir/.. $(basename $kerneldir)
       fi
     fi
-    if [ -f "linux-$KERNELVERSION.tar.xz" ]; then
+    if [ ! -d "$kerneldir" ] && [ -f "linux-$KERNELVERSION.tar.xz" ]; then
       $sudo mkdir -p $kerneldir
       echo "Extracting linux-tar.xz..."
       $sudo tar -xf linux-$KERNELVERSION.tar.xz -C $kerneldir/..
-    elif [ -f "linux-$KERNELVERSION.tar.gz" ]; then
+    elif [ ! -d "$kerneldir" ] &&  [ -f "linux-$KERNELVERSION.tar.gz" ]; then
       $sudo mkdir -p $kerneldir
       echo "Extracting linux-tar.gz..."
       $sudo tar -xf linux-$KERNELVERSION.tar.gz -C $kerneldir/..
