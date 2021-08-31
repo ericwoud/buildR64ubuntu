@@ -1,7 +1,5 @@
 #!/bin/bash
 
-export LANG=C
-
 GCC=""   # use standard ubuntu gcc version
 #GCC="https://releases.linaro.org/components/toolchain/binaries/latest-7/aarch64-linux-gnu/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu.tar.xz"
 
@@ -63,24 +61,46 @@ IMAGE_SIZE_MB=7456                # Size of image
 BL2_END_KB=1024                   # End of bl2 partition
 MINIMAL_SIZE_FIP_MB=3             # Minimal size of fip partition
 
-DEBOOTSTR_SOURCE="http://ports.ubuntu.com/ubuntu-ports" # Ubuntu
-DEBOOTSTR_COMPNS="main,restricted,universe,multiverse"  # Ubuntu
-RELEASE="focal"                                         # Ubuntu version
-#DEBOOTSTR_SOURCE="http://ftp.debian.org/debian/"       # Debian
-#DEBOOTSTR_COMPNS="main,contrib,non-free"               # Debian
-#RELEASE="buster"                                       # Debian version
+# Choose one of the three following linux distributions:
 
-NEEDEDPACKAGES="locales,hostapd,openssh-server,crda,resolvconf,iproute2,nftables,isc-dhcp-server"
-# Extra packages installed in rootfs, comma separated list, no spaces
-EXTRAPACKAGES="vim,dbus,screen,mmc-utils"
+### UBUNTU ###
+#RELEASE="focal"
+#DEBOOTSTR_SOURCE="http://ports.ubuntu.com/ubuntu-ports"
+#DEBOOTSTR_COMPNS="main,restricted,universe,multiverse"
+
+### DEBIAN ###
+#RELEASE="buster"
+#DEBOOTSTR_SOURCE="http://ftp.debian.org/debian/"
+#DEBOOTSTR_COMPNS="main,contrib,non-free"
+
+### ARCH LINUX ###
+RELEASE="arch"
+ARCHBOOTSTRAP="https://raw.githubusercontent.com/tokland/arch-bootstrap/master/arch-bootstrap.sh"
+
+# Packages installed in rootfs, comma separated list, no spaces
+NEEDED_PACKAGES_DEBIAN="locales,hostapd,openssh-server,crda,iproute2,nftables"
+EXTRA_PACKAGES_DEBIAN="vim,screen,mmc-utils"
+# Space separated
+SCRIPT_PACKAGES_DEBIAN="build-essential git wget flex bison \
+u-boot-tools libncurses-dev libssl-dev zerofree symlinks bc ca-certificates parted gzip \
+arch-install-scripts udisks2"
+
+NEEDED_PACKAGES_ARCHLX="base hostapd openssh crda iproute2 nftables"
+EXTRA_PACKAGES_ARCHLX="vim screen"
+SCRIPT_PACKAGES_ARCHLX="base-devel git wget uboot-tools ncurses openssl \
+bc ca-certificates parted gzip arch-install-scripts udisks2"
+SCRIPT_PACKAGES_AUR="zerofree symlinks mmc-utils-git"
 
 SETUP="RT"   # Setup as RouTer
 #SETUP="AP"  # Setup as Access Point
 
 LC="en_US.utf8"                      # Locale
 TIMEZONE="Europe/Paris"              # Timezone
-KEYBOARD="us"                        # Keyboard
 ROOTPWD="admin"                      # Root password
+
+export LC_ALL=C
+export LANG=C
+export LANGUAGE=C
 
 function unmountrootfs {
   if [ -v rootfsdir ] && [ ! -z $rootfsdir ]; then
@@ -240,7 +260,7 @@ else
     echo "Not inserted! (Maybe not matching the target device on the card)"
     exit
   fi
-  if [ $rootdev == $mountdev ];then
+  if [ "$rootdev" == "$mountdev" ];then
     rootfsdir="" ; r="" ; R=""      # Protect root when running from it!
   else
     rootfsdir=/mnt/bpirootfs
@@ -254,7 +274,7 @@ if [ ! -z $rootfsdir ]; then
               -o exec,dev,noatime,nodiratime
 fi
 
-schroot="$sudo LC_ALL=C LANGUAGE=C LANG=C chroot $rootfsdir"
+schroot="$sudo chroot $rootfsdir"
 [ -z $SRC ] && src=$rootfsdir/usr/src || src=$(realpath $SRC)
 [ -z $rootfsdir ] && src="/usr/src"
 kerneldir=$src/linux-$KERNELVERSION
@@ -267,6 +287,7 @@ if [ "$R" = true ] ; then
   echo Removing rootfs...
   $sudo rm -rf $rootfsdir/!(usr)
   $sudo rm -rf $rootfsdir/usr/!(src)
+  $sudo rm -rf $rootfsdir/.*
 fi
 if [ "$T" = true ] ; then
   echo Removing .tar...
@@ -283,12 +304,22 @@ if [ "$F" = true ] ; then
 fi
 $sudo rmdir --ignore-fail-on-non-empty -p $rootfsdir/usr/src
 if [ "$a" = true ]; then
-  $sudo apt-get install --yes git wget build-essential flex bison gcc-aarch64-linux-gnu \
-                              u-boot-tools libncurses-dev libssl-dev zerofree symlinks
-  if [ $bpir64 == "true" ]; then
-    $sudo apt-get install --yes bc ca-certificates parted # install these when running on R64
+  if [ ! -f "$rootfsdir/etc/arch-release" ]; then
+    ### Ubuntu / Debian
+    $sudo apt-get install --yes $SCRIPT_PACKAGES_DEBIAN
+    if [ $bpir64 != "true" ]; then
+      $sudo apt-get install --yes debootstrap qemu-user-static gcc-aarch64-linux-gnu libc6:i386 
+    fi
   else
-    $sudo apt-get install --yes gzip debootstrap qemu-user-static libc6:i386 
+    ### Archlinux
+    $sudo pacman -S --needed --noconfirm $SCRIPT_PACKAGES_ARCHLX
+    aurinstall $SCRIPT_PACKAGES_AUR
+    if [ $bpir64 != "true" ]; then
+      $sudo pacman -S --needed --noconfirm debootstrap aarch64-linux-gnu-gcc
+      aurinstall qemu-user-static
+    fi
+  fi
+  if [ $bpir64 != "true" ]; then
     gccname=$(basename $GCC)
     if [ ! -z $GCC ]; then
       wget -nv -N $GCC
@@ -327,12 +358,21 @@ if [ "$r" = true ]; then
        exit
     fi
     if [ ! -f "rootfs.$RELEASE.tar.bz2" ]; then
-      packages=$NEEDEDPACKAGES","$EXTRAPACKAGES
-      [[ -f "rootfs-$RELEASE/etc/network/interfaces" ]] && packages="$packages,ifupdown"
-      $sudo debootstrap --arch=arm64 --foreign --no-check-gpg --components=$DEBOOTSTR_COMPNS \
-        --include="$packages" $RELEASE $rootfsdir $DEBOOTSTR_SOURCE
-      $sudo cp /usr/bin/qemu-aarch64-static $rootfsdir/usr/bin/
-      $schroot /debootstrap/debootstrap --second-stage
+      if [ "$RELEASE" != "arch" ]; then
+        packages=$NEEDED_PACKAGES_DEBIAN","$EXTRA_PACKAGES_DEBIAN
+        [[ -f "rootfs-$RELEASE/etc/network/interfaces" ]] && packages="$packages,ifupdown"
+        $sudo debootstrap --arch=arm64 --foreign --no-check-gpg --components=$DEBOOTSTR_COMPNS \
+          --include="$packages" $RELEASE $rootfsdir $DEBOOTSTR_SOURCE
+        $sudo cp /usr/bin/qemu-aarch64-static $rootfsdir/usr/bin/
+        $schroot /debootstrap/debootstrap --second-stage
+      else
+        wget --no-verbose $ARCHBOOTSTRAP --no-clobber -P ./tools/
+        $sudo bash ./tools/$(basename $ARCHBOOTSTRAP) -a aarch64 $rootfsdir 2>&0
+        $sudo arch-chroot $rootfsdir /usr/bin/pacman --noconfirm --arch aarch64 -Sy \
+              --overwrite \* $NEEDED_PACKAGES_ARCHLX $EXTRA_PACKAGES_ARCHLX
+
+        yes | $sudo arch-chroot $rootfsdir /usr/bin/pacman -Scc
+      fi  
       if [ "$t" = true ]; then
         echo "Creating rootfs.tar..."
         $sudo tar -cjf rootfs.$RELEASE.tar.bz2 -C $rootfsdir .
@@ -343,7 +383,7 @@ if [ "$r" = true ]; then
       $sudo tar -xjf rootfs.$RELEASE.tar.bz2 -C $rootfsdir
     fi
   fi
-  echo root:$ROOTPWD | $schroot chpasswd 
+  echo root:$ROOTPWD | $schroot chpasswd
   symlinks -cr rootfs-*/
   $sudo cp -r --remove-destination --dereference -v rootfs-$RELEASE/. $rootfsdir
   for bp in $rootfsdir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
@@ -357,6 +397,7 @@ if [ "$r" = true ]; then
   $sudo cp -rfv --no-dereference rootfs-*/ $rootfsdir/root/buildR64ubuntu/
   $sudo cp -rfv --no-dereference uboot-*/  $rootfsdir/root/buildR64ubuntu/
   $sudo cp -rfv --no-dereference atf-*/    $rootfsdir/root/buildR64ubuntu/
+  $sudo cp -rfv --no-dereference tools/    $rootfsdir/root/buildR64ubuntu/
   $sudo cp -fv build.sh $rootfsdir/root/buildR64ubuntu/
 fi
 
@@ -383,7 +424,9 @@ if [ "$b" = true ]; then
   $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
              BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 DEVICE_HEADER_OFFSET=0 \
              MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip
+  [[ $? != 0 ]] && exit
   make -j1 --directory=./tools/ clean all # -j1 so first clean then all
+  [[ $? != 0 ]] && exit
   $sudo dd of="${mountdev::-1}2" if=/dev/zero 2>/dev/null
   $sudo dd of="${mountdev::-1}2" if=$src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
   $sudo dd of="${mountdev::-1}3" if=/dev/zero 2>/dev/null
@@ -459,7 +502,7 @@ if [ "$k" = true ] ; then
     $sudo make $makeoptions menuconfig
     $sudo make $makeoptions savedefconfig 
     format=$(realpath ./tools/formatdefconfig.sh)
-    (cd $kerneldir; $sudo "ARCH=arm64" $format)
+    (cd $kerneldir; ARCH=arm64 $sudo $format)
     read -p "Type <save> to save configuration permanently: " prompt
     if [[ $prompt == "save" ]]; then
       cp --remove-destination -v $kerneldir/formatdef/defconfig linux-$KERNELVERSION/defconfig

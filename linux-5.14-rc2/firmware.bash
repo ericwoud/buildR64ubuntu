@@ -12,5 +12,5 @@ do
   $sudo wget --no-verbose -N $url"/"$file -P $rootfsdir/lib/firmware/mediatek
 done
 
-$sudo cp -r --remove-destination --dereference -v rootfs-$RELEASE/lib/firmware/ $rootfsdir/lib/
+$sudo cp -r --remove-destination --dereference -v linux-$KERNELVERSION/firmware/ $rootfsdir/lib/
 

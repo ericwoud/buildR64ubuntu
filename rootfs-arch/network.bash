@@ -6,3 +6,5 @@ $sudo rm -rf $rootfsdir/etc/systemd/network-*
 
 $schroot systemctl reenable systemd-resolved.service
 
+$schroot systemctl reenable hostapd.service
+

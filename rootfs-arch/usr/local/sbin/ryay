@@ -1,0 +1,12 @@
+#!/bin/bash
+# Run yay from root
+
+[ $USER = "root" ] || exit 0
+function finish { rm -f /etc/sudoers.d/ryay ; }
+trap finish EXIT
+yaybin=$(which yay)
+mkdir -p /var/local/ryay
+chown nobody:nobody /var/local/ryay
+echo -e "nobody ALL=(ALL:ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/ryay
+sudo -u nobody HOME=/var/local/ryay yay "$@"
+exit 0

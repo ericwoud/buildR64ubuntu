@@ -1,1 +1,0 @@
-../rootfs-focal/setup_dhcpd.bash

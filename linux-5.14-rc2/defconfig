@@ -3,7 +3,7 @@
 #   https://github.com/ericwoud/formatdefconfig.git
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 5.12.2 Kernel Configuration
+# Linux/arm64 5.14.0-rc2 Kernel Configuration
 #
 
 #
@@ -677,6 +677,7 @@ CONFIG_MTK_EFUSE=y
 #
 CONFIG_EXT4_FS=y
 CONFIG_XFS_FS=m
+CONFIG_AUTOFS_FS=y
 CONFIG_OVERLAY_FS=y
 
 #

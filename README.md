@@ -1,6 +1,6 @@
 # buildR64ubuntu
 
-Install a minimal Ubuntu on Banana Pi R64 from scratch. 
+Install a minimal Arch-Linux, Ubuntu or Debian on Banana Pi R64 from scratch. 
 
 Based on: [buildWubuntu](https://github.com/ericwoud/buildWubuntu.git)
 , [frank-w's atf](https://github.com/frank-w/BPI-R64-ATF)
@@ -117,8 +117,10 @@ ifstat -wi eth0,eth1
 If you don't like this trick, then:
 
 * Move 'DHCP=yes', under 'Network', from 10-eth1.network to 10-wan.network.
-* Remove 10-eth1.network file
 * Remove 'aux' from 10-wan.network file.
+* Remove 'Bridge=brlan' from 10-wan.network file.
+* Remove whole 'BridgeVLAN' section from 10-wan.network file.
+* Remove 10-eth1.network file
 * Adjust nftables.conf as described in the file.
 
 
@@ -142,6 +144,12 @@ Some DSA drivers have a problem with this setup, but some are recently fixed wit
 * MyGica T230C2 DVB-T and DVB-C support.
 * Guest WIFI
 
+## Major update 31-08-2021
+
+* Able to install Arch-Linux, it is also now the default. Guess the repo needs a name change.
+* Using systemd's dhcp server.
+* Using systemd-resolved
+* Many other small changes
 
 ## Features
 

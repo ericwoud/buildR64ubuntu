@@ -1,6 +1,1 @@
-# UNCONFIGURED FSTAB FOR BASE SYSTEM
-# However, nowadays with systemd, a correct kernel device and fstype in fstab are unncesessary.
-dummy / auto defaults,noatime,nodiratime 0 1
-PARTLABEL=root-bpir64-emmc /media/emmc ext4 defaults,exec,dev,noatime,nodiratime,nofail 0 0
-PARTLABEL=root-bpir64-sdmmc /media/sdmmc ext4 defaults,exec,dev,noatime,nodiratime,nofail 0 0
-
+../../rootfs-arch/etc/fstab

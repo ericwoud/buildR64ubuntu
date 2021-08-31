@@ -1,0 +1,12 @@
+diff -Naur a/PKGBUILD b/PKGBUILD
+--- a/PKGBUILD	2021-08-29 16:51:11.080953386 +0200
++++ b/PKGBUILD	2021-08-29 16:51:26.644738615 +0200
+@@ -32,3 +32,8 @@
+     make DESTDIR="$pkgdir/" prefix=/usr install
+     install -D man/mmc.1 "$pkgdir/usr/share/man/man1/mmc.1"
+ }
++
++prepare() {
++    patch --directory="${srcdir}" --forward --strip=1 --input="/usr/local/etc/aurinstall/${pkgname}-src.patch"
++}
++

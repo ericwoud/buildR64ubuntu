@@ -1,0 +1,12 @@
+diff -Naur a/mmc-utils/Makefile b/mmc-utils/Makefile
+--- a/mmc-utils/Makefile	2021-08-29 12:02:54.584628306 +0200
++++ b/mmc-utils/Makefile	2021-08-29 15:19:55.880319893 +0200
+@@ -8,7 +8,7 @@
+ 	3rdparty/hmac_sha/hmac_sha2.o \
+ 	3rdparty/hmac_sha/sha2.o
+ 
+-CHECKFLAGS = -Wall -Werror -Wuninitialized -Wundef
++CHECKFLAGS = -Wall -Wuninitialized -Wundef
+ 
+ DEPFLAGS = -Wp,-MMD,$(@D)/.$(@F).d,-MT,$@
+ 
