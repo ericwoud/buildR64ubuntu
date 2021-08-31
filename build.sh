@@ -25,8 +25,8 @@ KERNELDTB="mt7622-bananapi-bpi-r64"
 UBOOTDTB="mt7622-bananapi-bpi-r64"
 
 ATFGIT="https://github.com/mtk-openwrt/arm-trusted-firmware.git"
-ATFBRANCH="mt7622-bpir64"
-#ATFBRANCH="mtksoc"  # Hangs at reboot
+#ATFBRANCH="mt7622-bpir64" # Stale branch
+ATFBRANCH="mtksoc"  # Was fixed in commit a63914612904642ed974390fff620f7003ebc20a
 
 ATFDEVICE="sdmmc"
 #ATFDEVICE="emmc"
