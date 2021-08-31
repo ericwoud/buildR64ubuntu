@@ -7,7 +7,7 @@ Based on: [buildWubuntu](https://github.com/ericwoud/buildWubuntu.git)
 and [frank-w's kernel](https://github.com/frank-w/BPI-R2-4.14/tree/5.12-main)
 
 Now includes a patch so that temperature is regulated at 87 instead of 47 degrees!
-Delete the file thermal_cpu.patch bofore building, if you do not want to.
+Delete the file thermal_cpu.patch before building, if you do not want to.
 
 The script is in development and uses sudo. Any bug may possibly delete everything permanently!
 
@@ -62,7 +62,7 @@ IPforward is on, the system is setup as router.
 
 After this, you are on your own. It is supposed to be a minimal installation of Ubuntu.
 
-When you need to build in-tree/out-of-tree kernel modules, first execute the following on the R64:
+When you need to build a kernel on the R64 or build in-tree/out-of-tree kernel modules, first execute the following on the R64:
 
 ```
 ./build.sh -akp
@@ -77,7 +77,7 @@ Write the image file for sd-card to the appropriate device, MAKE SURE YOU HAVE T
 ```
 xz -dcv ~/Downloads/imagename-sdmmc.img.xz | sudo dd of=/dev/sda
 ```
-If you want, copy the imagename-emmc.img.xz image to the sd-card (mount with nautilus):
+If you want, copy the imagename-emmc.img.xz image to the sd-card (mount with nautilus or disks):
 ```
 sudo cp ~/Downloads/imagename-emmc.img.xz /media/$USER/BPI-ROOT/root/
 ```
@@ -107,6 +107,8 @@ Now build the whole image, same as before.
 
 
 ## Using port 5 of the dsa switch
+
+Note: This does not work when running from emmc. Looks like eth1 does not get initialised correctly. Follow the steps below to remove it if you want to use a Router setup and run on emmc.
 
 Port 5 is available and named aux. Wan and aux port are in a separate vlan. Eth1 is setup as outgoing port instead of wan port.
 
