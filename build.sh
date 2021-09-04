@@ -35,8 +35,7 @@ ATFDEVICE="sdmmc"
 ATFBUILDARGS="DDR3_FLYBY=1 LOG_LEVEL=40"
 
 UBOOTGIT="https://github.com/u-boot/u-boot.git"
-UBOOTBRANCH="v2021.01"
-#UBOOTBRANCH="v2021.04" # Hangs
+UBOOTBRANCH="v2021.10-rc3"
 
 # Uncomment if you do not want to use a SD card, but a loop-device instead.
 #USE_LOOPDEV="true"          # Remove SD card, because of same label
@@ -411,7 +410,7 @@ if [ "$b" = true ]; then
     $sudo git --no-pager clone --branch $ATFBRANCH --depth 1 $ATFGIT $src/atf-$ATFBRANCH 2>&0
     [[ $? != 0 ]] && exit
   fi
-  if [ ! -d "$src/uboot-$UBOOTBRANCH" ]; then
+  if [ ! -d "$src/uboot-$UBOOTBRANCH" ]; then  
     $sudo git --no-pager clone --branch $UBOOTBRANCH --depth 1 $UBOOTGIT $src/uboot-$UBOOTBRANCH 2>&0
     [[ $? != 0 ]] && exit
   fi
