@@ -7,7 +7,7 @@ SRC=""                 # Installs source in /usr/src of sd-card/image
 #SRC="./src"           # Installs source in same folder as build.sh
 #SRC="/usr/src"        # When running on sd-card, use the same source to build emmc 
 
-KERNELVERSION="5.14-rc2"        # Custom Kernel files in folder named 'linux-5.12'
+KERNELVERSION="5.15-rc1"        # Custom Kernel files in folder named 'linux-5.12'
 #KERNELVERSION="master"          # master (head) of git, name folder 'linux-master'
 
 #KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
@@ -311,10 +311,10 @@ if [ "$a" = true ]; then
     fi
   else
     ### Archlinux
-    $sudo pacman -S --needed --noconfirm $SCRIPT_PACKAGES_ARCHLX
+    $sudo pacman -Syu --needed --noconfirm $SCRIPT_PACKAGES_ARCHLX
     aurinstall $SCRIPT_PACKAGES_AUR
     if [ $bpir64 != "true" ]; then
-      $sudo pacman -S --needed --noconfirm debootstrap aarch64-linux-gnu-gcc
+      $sudo pacman -Syu --needed --noconfirm debootstrap aarch64-linux-gnu-gcc
       aurinstall qemu-user-static
     fi
   fi
