@@ -19,13 +19,10 @@ KERNEL="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/snaps
 
 KERNELLOCALVERSION="-0"      # Is added to KERNELVERSION by make for name of modules dir.
 
-KERNELBOOTARGS="console=ttyS0,115200 rw rootwait"
-
 KERNELDTB="mt7622-bananapi-bpi-r64"
 UBOOTDTB="mt7622-bananapi-bpi-r64"
 
 ATFGIT="https://github.com/mtk-openwrt/arm-trusted-firmware.git"
-#ATFBRANCH="mt7622-bpir64" # Stale branch
 ATFBRANCH="mtksoc"  # Was fixed in commit a63914612904642ed974390fff620f7003ebc20a
 
 ATFDEVICE="sdmmc"
@@ -34,8 +31,12 @@ ATFDEVICE="sdmmc"
 #https://git.openwrt.org/?p=openwrt/openwrt.git;a=blob;f=package/boot/arm-trusted-firmware-mediatek/Makefile
 ATFBUILDARGS="DDR3_FLYBY=1 LOG_LEVEL=40"
 
+#USE_UBOOT="true"          # bootchain with (or without) U-Boot
+
 UBOOTGIT="https://github.com/u-boot/u-boot.git"
 UBOOTBRANCH="v2021.10-rc3"
+
+KERNELBOOTARGS="console=ttyS0,115200 rw rootwait root=PARTLABEL=root-bpir64-${ATFDEVICE}"
 
 # Uncomment if you do not want to use a SD card, but a loop-device instead.
 #USE_LOOPDEV="true"          # Remove SD card, because of same label
@@ -58,7 +59,7 @@ ROOTFS_LABEL="BPI-ROOT"
 
 IMAGE_SIZE_MB=7456                # Size of image
 BL2_END_KB=1024                   # End of bl2 partition
-MINIMAL_SIZE_FIP_MB=3             # Minimal size of fip partition
+MINIMAL_SIZE_FIP_MB=15             # Minimal size of fip partition
 
 # Choose one of the three following linux distributions:
 
@@ -197,6 +198,23 @@ function formatsd {
     $sudo mmc bootpart enable 7 1 ${device}
   fi
   $sudo lsblk -o name,mountpoint,label,size,uuid "${device}"
+}
+
+function writefip {
+  if [ "$USE_UBOOT" != true ] && [ -f "$src/atf-$ATFBRANCH/tools/fiptool/fiptool" ]; then
+    $sudo mkdir -p $src/atf-$ATFBRANCH/build/mt7622/release/
+    $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool --verbose create \
+                        $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin \
+               --soc-fw $src/atf-$ATFBRANCH/build/mt7622/release/bl31.bin \
+                --nt-fw $kerneldir/arch/arm64/boot/Image \
+         --nt-fw-config $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb
+    $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool info \
+                        $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
+  fi
+  if [ -f "$src/atf-$ATFBRANCH/build/mt7622/release/fip.bin" ]; then
+    $sudo dd of="${mountdev::-1}2" if=/dev/zero 2>/dev/null
+    $sudo dd of="${mountdev::-1}2" if=$src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
+  fi
 }
 
 # INIT VARIABLES
@@ -369,7 +387,6 @@ if [ "$r" = true ]; then
         $sudo bash ./tools/$(basename $ARCHBOOTSTRAP) -a aarch64 $rootfsdir 2>&0
         $sudo arch-chroot $rootfsdir /usr/bin/pacman --noconfirm --arch aarch64 -Sy \
               --overwrite \* $NEEDED_PACKAGES_ARCHLX $EXTRA_PACKAGES_ARCHLX
-
         yes | $sudo arch-chroot $rootfsdir /usr/bin/pacman -Scc
       fi  
       if [ "$t" = true ]; then
@@ -405,7 +422,6 @@ if [ "$b" = true ]; then
   mountdevname=${mountdev/"/dev/"/}
   firstavailblock=$(cat "/sys/class/block/"${mountdevname::-1}3"/start")
   $sudo mkdir -p $src/
-  $sudo mkdir -p $rootfsdir/boot/
   if [ ! -d "$src/atf-$ATFBRANCH" ]; then
     $sudo git --no-pager clone --branch $ATFBRANCH --depth 1 $ATFGIT $src/atf-$ATFBRANCH 2>&0
     [[ $? != 0 ]] && exit
@@ -419,15 +435,25 @@ if [ "$b" = true ]; then
   for bp in ./uboot-$UBOOTBRANCH/*.bash ; do source $bp ; done
   for bp in ./atf-$ATFBRANCH/*.patch;     do echo $bp ; $sudo patch -d $src/atf-$ATFBRANCH      -p1 -N -r - < $bp ; done
   for bp in ./uboot-$UBOOTBRANCH/*.patch; do echo $bp ; $sudo patch -d  $src/uboot-$UBOOTBRANCH -p1 -N -r - < $bp ; done
-  ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig all
-  $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
-             BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 DEVICE_HEADER_OFFSET=0 \
-             MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip
-  [[ $? != 0 ]] && exit
   make -j1 --directory=./tools/ clean all # -j1 so first clean then all
   [[ $? != 0 ]] && exit
-  $sudo dd of="${mountdev::-1}2" if=/dev/zero 2>/dev/null
-  $sudo dd of="${mountdev::-1}2" if=$src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
+  if [ "$USE_UBOOT" == true ]; then
+    ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig all
+    [[ $? != 0 ]] && exit
+    $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
+        BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 DEVICE_HEADER_OFFSET=0 \
+        MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip
+    [[ $? != 0 ]] && exit
+    writefip
+  else
+    ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig tools-only
+    [[ $? != 0 ]] && exit
+    $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
+        $ATFBUILDARGS USE_MKIMAGE=1 DEVICE_HEADER_OFFSET=0 PRELOADED_BL33_BASE=BL33_BASE \
+        MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fiptool # Set PRELOADED: boot linux
+    [[ $? != 0 ]] && exit
+    [ "$k" != true ] && writefip
+  fi
   $sudo dd of="${mountdev::-1}3" if=/dev/zero 2>/dev/null
   $sudo dd of="${device}" bs=1 count=440 \
            if=$src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
@@ -522,13 +548,20 @@ if [ "$k" = true ] ; then
   kernelrelease=$($sudo make -s $makeoptions kernelrelease)
   $sudo make $makeoptions $makej UIMAGE_LOADADDR=0x40008000 Image dtbs modules # Remove UIMAGE_LOADADDR= ???
   [[ $? != 0 ]] && exit  
-  $sudo mkimage -A arm64 -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernelrelease" \
-                -d $kerneldir/arch/arm64/boot/Image $kerneldir/uImage
-  $sudo mkdir -p $rootfsdir/boot/
-  $sudo cp -af $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb $rootfsdir/boot/$kernelrelease.dtb
-  $sudo cp -af $kerneldir/uImage $rootfsdir/boot/$kernelrelease.uImage
-  $sudo echo -e "image=boot/$kernelrelease.uImage\ndtb=boot/$kernelrelease.dtb" | \
+  if [ "$USE_UBOOT" == true ]; then
+    $sudo mkimage -A arm64 -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernelrelease" \
+                  -d $kerneldir/arch/arm64/boot/Image $kerneldir/uImage
+    $sudo mkdir -p $rootfsdir/boot/
+    $sudo cp -af $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb $rootfsdir/boot/$kernelrelease.dtb
+    $sudo cp -af $kerneldir/uImage $rootfsdir/boot/$kernelrelease.uImage
+    $sudo echo -e "image=boot/$kernelrelease.uImage\ndtb=boot/$kernelrelease.dtb" | \
              $sudo tee    $rootfsdir/boot/uEnv.txt
+#  else
+#    $sudo cp --remove-destination -v $kerneldir/arch/arm64/boot/Image $kerneldir/arch/arm64/boot/ImageDtb
+#    $sudo bash -c "cat $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb >> $kerneldir/arch/arm64/boot/ImageDtb"
+#   $sudo bash -c "cat ./extracted.dtb >> $kerneldir/arch/arm64/boot/ImageDtb"
+  fi
+  
   $sudo make $makeoptions modules_install INSTALL_MOD_PATH=$rootfsdir
   if [ $kerneldir/outoftree/* != "$kerneldir/outoftree/*" ]; then
     $sudo mkdir -p $rootfsdir/lib/modules/$kernelrelease/extra
@@ -546,7 +579,9 @@ if [ "$k" = true ] ; then
     $sudo rm -vf rootfsdir/lib/modules/$kernelrelease/build
     $sudo rm -vf rootfsdir/lib/modules/$kernelrelease/source
   fi
+  [ "$USE_UBOOT" != true ] && writefip
 fi
+
 
 ### COMPRESS IMAGE FROM SD-CARD OR LOOP_DEV ###
 if [ "$c" = true ]; then
