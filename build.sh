@@ -55,13 +55,17 @@ SD_BLOCK_SIZE_KB=8                   # in kilo bytes
 # bc -l <<<"$(cat /sys/block/mmcblk1/queue/discard_granularity) /1024 /1024"
 SD_ERASE_SIZE_MB=4                   # in Mega bytes
 
-ROOTFS_EXT4_OPTIONS=""
-#ROOTFS_EXT4_OPTIONS="-O ^has_journal"  # No journal is faster, but you can get errors after powerloss
-ROOTFS_LABEL="BPI-ROOT"
-
 IMAGE_SIZE_MB=7456                # Size of image
 BL2_END_KB=1024                   # End of bl2 partition
 MINIMAL_SIZE_FIP_MB=15             # Minimal size of fip partition
+
+#ROOTFS_FS="ext4"
+ROOTFS_FS="f2fs"
+ROOTFS_LABEL="BPI-ROOT"
+
+ROOTFS_EXT4_OPTIONS=""
+#ROOTFS_EXT4_OPTIONS="-O ^has_journal"  # No journal is faster, but you can get errors after powerloss
+
 
 # Choose one of the three following linux distributions:
 
@@ -99,6 +103,10 @@ SETUP="RT"   # Setup as RouTer
 LC="en_US.utf8"                      # Locale
 TIMEZONE="Europe/Paris"              # Timezone
 ROOTPWD="admin"                      # Root password
+
+
+[ "$USE_UBOOT" == true ] && ROOTFS_FS="ext4" # f2fs not supported in U-Boot
+
 
 export LC_ALL=C
 export LANG=C
@@ -176,25 +184,33 @@ function formatsd {
   $sudo dd of="${device}" if=/dev/zero bs=1024 count=$rootstart
   $sudo parted -s -- "${device}" unit kiB \
     mklabel gpt \
-    mkpart primary ext4 $rootstart 100% \
-    mkpart primary ext2 $BL2_END_KB $rootstart \
-    mkpart primary ext2 0% $BL2_END_KB \
+    mkpart primary $rootstart 100% \
+    mkpart primary $BL2_END_KB $rootstart \
+    mkpart primary 0% $BL2_END_KB \
     name 1 root-bpir64-${ATFDEVICE} \
     name 2 fip \
     name 3 bl2 \
     print
   $sudo partprobe "${device}"
-  [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
-  stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
-  stripe=$(( ($SD_ERASE_SIZE_MB * 1024) / $SD_BLOCK_SIZE_KB ))
   lsblkdev=""
   while [ -z $lsblkdev ]; do
     lsblkdev=($(lsblk -prno name,pkname,partlabel | grep root-bpir64-${ATFDEVICE}))
     sleep 0.1
   done
   mountdev=${lsblkdev[0]}
-  $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
-                  -E stride=$stride,stripe-width=$stripe "${mountdev}"
+  if [ $ROOTFS_FS = "ext4" ];then
+    [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
+    stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
+    stripe=$(( ($SD_ERASE_SIZE_MB * 1024) / $SD_BLOCK_SIZE_KB ))
+    $sudo mkfs.ext4 -v $ROOTFS_EXT4_OPTIONS -b $(( $blksize * 1024 ))  -L $ROOTFS_LABEL \
+                    -E stride=$stride,stripe-width=$stripe "${mountdev}"
+  elif [ $ROOTFS_FS = "f2fs" ];then
+    nrseg=$(( $SD_ERASE_SIZE_MB / 2 )); [[ $nrseg -lt 1 ]] && nrseg=1
+    $sudo mkfs.f2fs -w $(( $SD_BLOCK_SIZE_KB * 1024 )) -s $nrseg \
+                    -f -l $ROOTFS_LABEL "${mountdev}"
+  else
+    echo "File System not supported"; exit
+  fi
   $sudo sync
   if [ -b ${device}"boot0" ] && [ $bpir64 == "true" ]; then
     $sudo mmc bootpart enable 7 1 ${device}
@@ -289,7 +305,7 @@ fi
 sectorsize=$(cat /sys/block/${device/"/dev/"/}/queue/hw_sector_size)
 if [ ! -z $rootfsdir ]; then
   [ -d $rootfsdir ] || $sudo mkdir $rootfsdir
-  $sudo mount --source $mountdev --target $rootfsdir -t ext4 \
+  $sudo mount --source $mountdev --target $rootfsdir \
               -o exec,dev,noatime,nodiratime
 fi
 

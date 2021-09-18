@@ -3,7 +3,7 @@
 #   https://github.com/ericwoud/formatdefconfig.git
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 5.14.0-rc2 Kernel Configuration
+# Linux/arm64 5.15.0-rc1 Kernel Configuration
 #
 
 #
@@ -114,7 +114,6 @@ CONFIG_JUMP_LABEL=y
 
 CONFIG_MODULES=y
 CONFIG_MODULE_UNLOAD=y
-# CONFIG_BLK_DEV_BSG is not set
 
 #
 # Executable file formats
@@ -306,6 +305,7 @@ CONFIG_MTD=y
 
 #
 # User Modules And Translation Layers
+# Note that in some cases UBI block is preferred. See MTD_UBI_BLOCK.
 #
 CONFIG_NFTL=m
 CONFIG_NFTL_RW=y
@@ -325,6 +325,7 @@ CONFIG_MTD_SPI_NOR=y
 # SCSI support type (disk, tape, CD-ROM)
 #
 CONFIG_BLK_DEV_SD=y
+# CONFIG_BLK_DEV_BSG is not set
 # end of SCSI device support
 
 CONFIG_ATA=y
@@ -677,6 +678,11 @@ CONFIG_MTK_EFUSE=y
 #
 CONFIG_EXT4_FS=y
 CONFIG_XFS_FS=m
+CONFIG_F2FS_FS=y
+CONFIG_F2FS_FS_SECURITY=y
+CONFIG_F2FS_CHECK_FS=y
+CONFIG_F2FS_FAULT_INJECTION=y
+CONFIG_F2FS_FS_COMPRESSION=y
 CONFIG_AUTOFS_FS=y
 CONFIG_OVERLAY_FS=y
 
