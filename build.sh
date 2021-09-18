@@ -30,6 +30,7 @@ ATFDEVICE="sdmmc"
 
 #https://git.openwrt.org/?p=openwrt/openwrt.git;a=blob;f=package/boot/arm-trusted-firmware-mediatek/Makefile
 ATFBUILDARGS="DDR3_FLYBY=1 LOG_LEVEL=40"
+#ATFBUILDARGS="DDR3_FLYBY=1 LOG_LEVEL=50" # (50 = LOG_LEVEL_VERBOSE)
 
 #USE_UBOOT="true"          # bootchain with (or without) U-Boot
 
@@ -51,6 +52,7 @@ SD_BLOCK_SIZE_KB=8                   # in kilo bytes
 # 1      4,00MiB  29872MiB  29868MiB  primary  fat32        lba
 # Also, once runnig on BPIR64 execute:
 # bc -l <<<"$(cat /sys/block/mmcblk1/device/preferred_erase_size) /1024 /1024"
+# bc -l <<<"$(cat /sys/block/mmcblk1/queue/discard_granularity) /1024 /1024"
 SD_ERASE_SIZE_MB=4                   # in Mega bytes
 
 ROOTFS_EXT4_OPTIONS=""
