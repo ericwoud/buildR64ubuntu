@@ -304,7 +304,6 @@ CONFIG_MTD=y
 # end of Partition parsers
 
 #
-# User Modules And Translation Layers
 # Note that in some cases UBI block is preferred. See MTD_UBI_BLOCK.
 #
 CONFIG_NFTL=m

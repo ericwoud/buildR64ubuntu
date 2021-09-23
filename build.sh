@@ -43,10 +43,12 @@ KERNELBOOTARGS="console=ttyS0,115200 rw rootwait root=PARTLABEL=root-bpir64-${AT
 #USE_LOOPDEV="true"          # Remove SD card, because of same label
 
 IMAGE_FILE="./my-bpir64-"$ATFDEVICE".img"
+#IMAGE_FILE="/media/$USER/FILES//my-bpir64-"$ATFDEVICE".img"
 
 # https://github.com/bradfa/flashbench.git, running multiple times:
 # sudo ./flashbench -a --count=64 --blocksize=1024 /dev/sda
 # Shows me that times increase at alignment of 8k
+# On f2fs it is used for wanted-sector-size, but sector size is stuck at 512
 SD_BLOCK_SIZE_KB=8                   # in kilo bytes
 # When the SD card was brand new, formatted by the manufacturer, parted shows partition start at 4MiB
 # 1      4,00MiB  29872MiB  29868MiB  primary  fat32        lba
@@ -89,12 +91,12 @@ EXTRA_PACKAGES_DEBIAN="vim,screen,mmc-utils"
 # Space separated
 SCRIPT_PACKAGES_DEBIAN="build-essential git wget flex bison \
 u-boot-tools libncurses-dev libssl-dev zerofree symlinks bc ca-certificates parted gzip \
-arch-install-scripts udisks2"
+arch-install-scripts udisks2 f2fs-tools"
 
 NEEDED_PACKAGES_ARCHLX="base hostapd openssh crda iproute2 nftables"
 EXTRA_PACKAGES_ARCHLX="vim screen"
 SCRIPT_PACKAGES_ARCHLX="base-devel git wget uboot-tools ncurses openssl \
-bc ca-certificates parted gzip arch-install-scripts udisks2"
+bc ca-certificates parted gzip arch-install-scripts udisks2 f2fs-tools"
 SCRIPT_PACKAGES_AUR="zerofree symlinks mmc-utils-git"
 
 SETUP="RT"   # Setup as RouTer
@@ -198,6 +200,7 @@ function formatsd {
     sleep 0.1
   done
   mountdev=${lsblkdev[0]}
+  echo "Root Filesystem:" $ROOTFS_FS
   if [ $ROOTFS_FS = "ext4" ];then
     [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
     stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
@@ -219,7 +222,11 @@ function formatsd {
 }
 
 function writefip {
-  if [ "$USE_UBOOT" != true ] && [ -f "$src/atf-$ATFBRANCH/tools/fiptool/fiptool" ]; then
+  if [ "$USE_UBOOT" == true ] && [ -f "$src/atf-$ATFBRANCH/tools/fiptool/fiptool" ] \
+                              && [ -f "$src/atf-$ATFBRANCH/build/mt7622/release/bl31.bin" ] \
+                              && [ -f "$kerneldir/arch/arm64/boot/Image" ] \
+                              && [ -f "$kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb" ]
+  then
     $sudo mkdir -p $src/atf-$ATFBRANCH/build/mt7622/release/
     $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool --verbose create \
                         $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin \
@@ -604,7 +611,7 @@ fi
 ### COMPRESS IMAGE FROM SD-CARD OR LOOP_DEV ###
 if [ "$c" = true ]; then
   unmountrootfs
-  $sudo zerofree -v $mountdev
+  [ $ROOTFS_FS = "ext4" ] && $sudo zerofree -v $mountdev
   if [ "$USE_LOOPDEV" == true ]; then
     detachloopdev
     xz --keep --force --verbose $IMAGE_FILE 2>&0

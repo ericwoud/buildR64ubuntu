@@ -76,7 +76,7 @@ while [[ $changed != "false" ]]; do
             changed="true"
           elif [[ ${fileout[i]:0:7} != 'CONFIG_' ]]  && [[ ${fileout[i]:0:9} != '# CONFIG_' ]]; then
             test="$(grep -F "$endof" $WORK/defconfig)"
-            if [ -z "$test" ] || [[ ${fileout[i-2]} == '# Boot options' ]]; then
+            if [ -z "$test" ]; then
               fileout[i-3]="&"
               fileout[i-2]="&"
               fileout[i-1]="&"
