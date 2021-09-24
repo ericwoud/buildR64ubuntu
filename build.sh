@@ -201,6 +201,7 @@ function formatsd {
   done
   mountdev=${lsblkdev[0]}
   echo "Root Filesystem:" $ROOTFS_FS
+  $sudo blkdiscard -fv "${mountdev}"
   if [ $ROOTFS_FS = "ext4" ];then
     [[ $SD_BLOCK_SIZE_KB -lt 4 ]] && blksize=$SD_BLOCK_SIZE_KB || blksize=4
     stride=$(( $SD_BLOCK_SIZE_KB / $blksize ))
@@ -581,12 +582,7 @@ if [ "$k" = true ] ; then
     $sudo cp -af $kerneldir/uImage $rootfsdir/boot/$kernelrelease.uImage
     $sudo echo -e "image=boot/$kernelrelease.uImage\ndtb=boot/$kernelrelease.dtb" | \
              $sudo tee    $rootfsdir/boot/uEnv.txt
-#  else
-#    $sudo cp --remove-destination -v $kerneldir/arch/arm64/boot/Image $kerneldir/arch/arm64/boot/ImageDtb
-#    $sudo bash -c "cat $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb >> $kerneldir/arch/arm64/boot/ImageDtb"
-#   $sudo bash -c "cat ./extracted.dtb >> $kerneldir/arch/arm64/boot/ImageDtb"
   fi
-  
   $sudo make $makeoptions modules_install INSTALL_MOD_PATH=$rootfsdir
   if [ $kerneldir/outoftree/* != "$kerneldir/outoftree/*" ]; then
     $sudo mkdir -p $rootfsdir/lib/modules/$kernelrelease/extra
