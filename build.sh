@@ -223,7 +223,7 @@ function formatsd {
 }
 
 function writefip {
-  if [ "$USE_UBOOT" == true ] && [ -f "$src/atf-$ATFBRANCH/tools/fiptool/fiptool" ] \
+  if [ "$USE_UBOOT" != true ] && [ -f "$src/atf-$ATFBRANCH/tools/fiptool/fiptool" ] \
                               && [ -f "$src/atf-$ATFBRANCH/build/mt7622/release/bl31.bin" ] \
                               && [ -f "$kerneldir/arch/arm64/boot/Image" ] \
                               && [ -f "$kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb" ]
