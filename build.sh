@@ -29,8 +29,7 @@ ATFDEVICE="sdmmc"
 #ATFDEVICE="emmc"
 
 #https://git.openwrt.org/?p=openwrt/openwrt.git;a=blob;f=package/boot/arm-trusted-firmware-mediatek/Makefile
-ATFBUILDARGS="DDR3_FLYBY=1 LOG_LEVEL=40"
-#ATFBUILDARGS="DDR3_FLYBY=1 LOG_LEVEL=50" # (50 = LOG_LEVEL_VERBOSE)
+ATFBUILDARGS="PLAT=mt7622 BOOT_DEVICE=$ATFDEVICE DDR3_FLYBY=1 LOG_LEVEL=40" # (50 = LOG_LEVEL_VERBOSE)
 
 #USE_UBOOT="true"          # bootchain with (or without) U-Boot
 
@@ -223,23 +222,9 @@ function formatsd {
 }
 
 function writefip {
-  if [ "$USE_UBOOT" != true ] && [ -f "$src/atf-$ATFBRANCH/tools/fiptool/fiptool" ] \
-                              && [ -f "$src/atf-$ATFBRANCH/build/mt7622/release/bl31.bin" ] \
-                              && [ -f "$kerneldir/arch/arm64/boot/Image" ] \
-                              && [ -f "$kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb" ]
-  then
-    $sudo mkdir -p $src/atf-$ATFBRANCH/build/mt7622/release/
-    $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool --verbose create \
-                        $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin \
-               --soc-fw $src/atf-$ATFBRANCH/build/mt7622/release/bl31.bin \
-                --nt-fw $kerneldir/arch/arm64/boot/Image \
-         --nt-fw-config $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb
-    $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool info \
-                        $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
-  fi
-  if [ -f "$src/atf-$ATFBRANCH/build/mt7622/release/fip.bin" ]; then
+  if [ -f "$1" ]; then
     $sudo dd of="${mountdev::-1}2" if=/dev/zero 2>/dev/null
-    $sudo dd of="${mountdev::-1}2" if=$src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
+    $sudo dd of="${mountdev::-1}2" if=$1
   fi
 }
 
@@ -320,6 +305,7 @@ fi
 schroot="$sudo chroot $rootfsdir"
 [ -z $SRC ] && src=$rootfsdir/usr/src || src=$(realpath $SRC)
 [ -z $rootfsdir ] && src="/usr/src"
+src=$(realpath $src)
 kerneldir=$src/linux-$KERNELVERSION
 echo OPTIONS: rootfs=$r boot=$b kernel=$k tar=$t apt=$a 
 if [ "$K" = true ] ; then
@@ -463,22 +449,24 @@ if [ "$b" = true ]; then
   for bp in ./uboot-$UBOOTBRANCH/*.patch; do echo $bp ; $sudo patch -d  $src/uboot-$UBOOTBRANCH -p1 -N -r - < $bp ; done
   make -j1 --directory=./tools/ clean all # -j1 so first clean then all
   [[ $? != 0 ]] && exit
+  mkimage="USE_MKIMAGE=1 MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage DEVICE_HEADER_OFFSET=0"
+  makeatf="$sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH $ATFBUILDARGS $mkimage"
   if [ "$USE_UBOOT" == true ]; then
     ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig all
     [[ $? != 0 ]] && exit
-    $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
-        BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin $ATFBUILDARGS USE_MKIMAGE=1 DEVICE_HEADER_OFFSET=0 \
-        MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fip
+    $makeatf BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin \
+             all fip
     [[ $? != 0 ]] && exit
-    writefip
+    writefip $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
   else
     ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig tools-only
     [[ $? != 0 ]] && exit
-    $sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH PLAT=mt7622 \
-        $ATFBUILDARGS USE_MKIMAGE=1 DEVICE_HEADER_OFFSET=0 PRELOADED_BL33_BASE=BL33_BASE \
-        MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage BOOT_DEVICE=$ATFDEVICE all fiptool # Set PRELOADED: boot linux
+    $makeatf PRELOADED_BL33_BASE=0 \
+             bl31 fiptool                                           # Set PRELOADED_BL33_BASE 0: no incbin bl31.bin
     [[ $? != 0 ]] && exit
-    [ "$k" != true ] && writefip
+    $makeatf PRELOADED_BL33_BASE=BL33_BASE \
+             bl2 $src/atf-$ATFBRANCH/build/mt7622/release/bl2.img   # Set PRELOADED_BL33_BASE: boot linux
+    [[ $? != 0 ]] && exit
   fi
   $sudo dd of="${mountdev::-1}3" if=/dev/zero 2>/dev/null
   $sudo dd of="${device}" bs=1 count=440 \
@@ -515,10 +503,10 @@ if [ "$k" = true ] ; then
         $sudo rm -rf $kerneldir/.git
         sources=$(wget -nv -qO- $KERNEL/v$KERNELVERSION/SOURCES) ; readarray -t sources <<<"$sources"
         if [ ! -z "${sources[0]}" ]; then # has SOURCES file
-          src=1
-          while [ $src -lt ${#sources[@]} ]; do
-            wget -nv -O /dev/stdout $KERNEL/v$KERNELVERSION/${sources[$src]} | $sudo patch -d $kerneldir -p1
-            let src++
+          psrc=1
+          while [ $psrc -lt ${#sources[@]} ]; do
+            wget -nv -O /dev/stdout $KERNEL/v$KERNELVERSION/${sources[$psrc]} | $sudo patch -d $kerneldir -p1
+            let psrc++
           done
         fi
       fi
@@ -600,7 +588,14 @@ if [ "$k" = true ] ; then
     $sudo rm -vf rootfsdir/lib/modules/$kernelrelease/build
     $sudo rm -vf rootfsdir/lib/modules/$kernelrelease/source
   fi
-  [ "$USE_UBOOT" != true ] && writefip
+  if [ "$USE_UBOOT" != true ] && [ -f "$src/atf-$ATFBRANCH/tools/fiptool/fiptool" ]; then
+    $sudo mkdir -p $src/atf-$ATFBRANCH/build/mt7622/release/
+    $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool --verbose create $kerneldir/arch/arm64/boot/fip.bin \
+                --nt-fw $kerneldir/arch/arm64/boot/Image \
+         --nt-fw-config $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb
+    $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool info $kerneldir/arch/arm64/boot/fip.bin
+    writefip $kerneldir/arch/arm64/boot/fip.bin
+  fi
 fi
 
 
