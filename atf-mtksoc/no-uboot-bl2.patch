@@ -1,13 +1,12 @@
 --- a/plat/mediatek/mt7622/bl2_plat_setup.c	2021-09-15 13:35:58.536925357 +0200
 +++ b/plat/mediatek/mt7622/bl2_plat_setup.c	2021-09-15 14:00:52.439937687 +0200
-@@ -72,7 +72,21 @@
+@@ -72,7 +72,19 @@
  		SET_STATIC_PARAM_HEAD(image_info, PARAM_EP, VERSION_2,
  				      image_info_t, 0),
  		.image_info.image_base = BL33_BASE,
 -		.image_info.image_max_size = 0x200000 /* 2MB */,
 +		.image_info.image_max_size = 0x1000000 /* 16MB */,
 +
-+#ifdef PRELOADED_BL33_BASE
 +		.next_handoff_image_id = NT_FW_CONFIG_ID,
 +	},
 +	/* Fill NT_FW_CONFIG related information */
@@ -19,7 +18,6 @@
 +			VERSION_2, image_info_t, 0),
 +		.image_info.image_base = BL32_BASE,
 +		.image_info.image_max_size = BL32_LIMIT,
-+#endif
  
  		.next_handoff_image_id = INVALID_IMAGE_ID,
  	}

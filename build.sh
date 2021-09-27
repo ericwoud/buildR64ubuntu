@@ -451,22 +451,20 @@ if [ "$b" = true ]; then
   [[ $? != 0 ]] && exit
   mkimage="USE_MKIMAGE=1 MKIMAGE=$src/uboot-$UBOOTBRANCH/tools/mkimage DEVICE_HEADER_OFFSET=0"
   makeatf="$sudo make $makej $crossc --directory=$src/atf-$ATFBRANCH $ATFBUILDARGS $mkimage"
+  # PRELOADED_BL33_BASE is not being used in mt7622 atf code, so we use it as binairy flags:
+  # 0b0001 : incbin BL31.bin inside of BL2 image, disable it during BL31 build because of common code!
+  [ "$USE_UBOOT" == true ] && ubtarget="all" || ubtarget="tools-only"
+  ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig $ubtarget
+  [[ $? != 0 ]] && exit
+  $makeatf PRELOADED_BL33_BASE=0b0000 bl31 fiptool
+  [[ $? != 0 ]] && exit
+  $makeatf PRELOADED_BL33_BASE=0b0001 bl2 $src/atf-$ATFBRANCH/build/mt7622/release/bl2.img
+  [[ $? != 0 ]] && exit
   if [ "$USE_UBOOT" == true ]; then
-    ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig all
-    [[ $? != 0 ]] && exit
-    $makeatf BL33=$src/uboot-$UBOOTBRANCH/u-boot.bin \
-             all fip
-    [[ $? != 0 ]] && exit
+    $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool --verbose create $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin \
+                --nt-fw $src/uboot-$UBOOTBRANCH/u-boot.bin
+    $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool info $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
     writefip $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
-  else
-    ARCH=arm64 $sudo make $makej $crossc --directory=$src/uboot-$UBOOTBRANCH mt7622_my_bpi_defconfig tools-only
-    [[ $? != 0 ]] && exit
-    $makeatf PRELOADED_BL33_BASE=0 \
-             bl31 fiptool                                           # Set PRELOADED_BL33_BASE 0: no incbin bl31.bin
-    [[ $? != 0 ]] && exit
-    $makeatf PRELOADED_BL33_BASE=BL33_BASE \
-             bl2 $src/atf-$ATFBRANCH/build/mt7622/release/bl2.img   # Set PRELOADED_BL33_BASE: boot linux
-    [[ $? != 0 ]] && exit
   fi
   $sudo dd of="${mountdev::-1}3" if=/dev/zero 2>/dev/null
   $sudo dd of="${device}" bs=1 count=440 \
