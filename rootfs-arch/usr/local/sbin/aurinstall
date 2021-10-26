@@ -2,6 +2,7 @@
 # install from aur
 
 packages="$@"
+patchpath=$(dirname $0)"/../etc/aurinstall"
 
 [ -z "$packages" ] && exit 0
 [ $USER = "root" ] && sudo="" || sudo="sudo -s"
@@ -15,8 +16,8 @@ do
     sudo -u nobody git --no-pager clone --depth 1 https://aur.archlinux.org/$package.git /tmp/aurinstall/$package 2>&0
     [[ $? != 0 ]] && exit
   fi
-  if [ -f "/usr/local/etc/aurinstall/$package.patch" ]; then
-    patch --directory="/tmp/aurinstall/$package" --forward --strip=1 --input="/usr/local/etc/aurinstall/$package.patch"
+  if [ -f "$patchpath/$package.patch" ]; then
+    patch --directory="/tmp/aurinstall/$package" --forward --strip=1 --input="$patchpath/$package.patch"
   fi
   (cd "/tmp/aurinstall/$package"; sudo HOME=/tmp/aurinstall/$package -u nobody makepkg --ignorearch)
   for package in /tmp/aurinstall/$package/*.pkg.*

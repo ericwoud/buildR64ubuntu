@@ -88,13 +88,13 @@ ARCHBOOTSTRAP="https://raw.githubusercontent.com/tokland/arch-bootstrap/master/a
 NEEDED_PACKAGES_DEBIAN="locales,hostapd,openssh-server,crda,iproute2,nftables"
 EXTRA_PACKAGES_DEBIAN="vim,screen,mmc-utils"
 # Space separated
-SCRIPT_PACKAGES_DEBIAN="build-essential git wget flex bison \
+SCRIPT_PACKAGES_DEBIAN="build-essential git debootstrap wget flex bison \
 u-boot-tools libncurses-dev libssl-dev zerofree symlinks bc ca-certificates parted gzip \
 arch-install-scripts udisks2 f2fs-tools"
 
 NEEDED_PACKAGES_ARCHLX="base hostapd openssh crda iproute2 nftables"
 EXTRA_PACKAGES_ARCHLX="vim screen"
-SCRIPT_PACKAGES_ARCHLX="base-devel git wget uboot-tools ncurses openssl \
+SCRIPT_PACKAGES_ARCHLX="base-devel git debootstrap wget uboot-tools ncurses openssl \
 bc ca-certificates parted gzip arch-install-scripts udisks2 f2fs-tools"
 SCRIPT_PACKAGES_AUR="zerofree symlinks mmc-utils-git"
 
@@ -337,15 +337,18 @@ if [ "$a" = true ]; then
     ### Ubuntu / Debian
     $sudo apt-get install --yes $SCRIPT_PACKAGES_DEBIAN
     if [ $bpir64 != "true" ]; then
-      $sudo apt-get install --yes debootstrap qemu-user-static gcc-aarch64-linux-gnu libc6:i386 
+      $sudo apt-get install --yes qemu-user-static gcc-aarch64-linux-gnu libc6:i386 
     fi
   else
     ### Archlinux
-    $sudo pacman -Syu --needed --noconfirm $SCRIPT_PACKAGES_ARCHLX
-    aurinstall $SCRIPT_PACKAGES_AUR
-    if [ $bpir64 != "true" ]; then
-      $sudo pacman -Syu --needed --noconfirm debootstrap aarch64-linux-gnu-gcc
-      aurinstall qemu-user-static
+    if [ $bpir64 == "true" ]; then
+      $sudo pacman -Syu --needed --noconfirm $SCRIPT_PACKAGES_ARCHLX
+      ./rootfs-arch/usr/local/sbin/aurinstall $SCRIPT_PACKAGES_AUR
+    else  # Not running on BPI-R64, just use yay
+      $sudo pacman -Syu --needed --noconfirm go
+      pacman -Qi yay
+      [[ $? != 0 ]] && ./rootfs-arch/usr/local/sbin/aurinstall yay
+      yay -S --noconfirm $SCRIPT_PACKAGES_ARCHLX $SCRIPT_PACKAGES_AUR aarch64-linux-gnu-gcc qemu-user-static
     fi
   fi
   if [ $bpir64 != "true" ]; then
