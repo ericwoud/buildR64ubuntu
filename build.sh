@@ -537,6 +537,7 @@ if [ "$k" = true ] ; then
     echo -e "\nSave altered config as '.config'.\n"
     read -p "Press <enter> to continue..." prompt
     $sudo make $makeoptions menuconfig
+#    $sudo make $makeoptions yes2modconfig
     $sudo make $makeoptions savedefconfig 
     format=$(realpath ./tools/formatdefconfig.sh)
     (cd $kerneldir; ARCH=arm64 $sudo $format)
