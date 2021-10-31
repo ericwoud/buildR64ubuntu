@@ -261,6 +261,32 @@ if [ $ATFDEVICE = "emmc" ];then
 else
   ubootdevnr=1
 fi
+
+if [ "$a" = true ]; then
+  if [ ! -f "/etc/arch-release" ]; then ### Ubuntu / Debian
+    $sudo apt-get install --yes $SCRIPT_PACKAGES_DEBIAN
+    if [ $bpir64 != "true" ]; then
+      $sudo apt-get install --yes qemu-user-static gcc-aarch64-linux-gnu libc6:i386 
+    fi
+  else ### Archlinux
+    $sudo pacman -Syu --needed --noconfirm $SCRIPT_PACKAGES_ARCHLX
+    ./rootfs-arch/usr/local/sbin/aurinstall $SCRIPT_PACKAGES_AUR
+    if [ $bpir64 != "true" ]; then # Not running on BPI-R64
+      $sudo pacman -Syu --needed --noconfirm aarch64-linux-gnu-gcc
+      ./rootfs-arch/usr/local/sbin/aurinstall binfmt-qemu-static qemu-user-static-bin
+    fi
+  fi
+  if [ $bpir64 != "true" ]; then
+    gccname=$(basename $GCC)
+    if [ ! -z $GCC ]; then
+      wget -nv -N $GCC
+      rm -rf gcc
+      mkdir gcc
+      tar -xf $gccname -C gcc  
+    fi
+  fi
+fi
+
 rootdev=$(lsblk -pilno name,type,mountpoint | grep -G 'part /$')
 rootdev=${rootdev%% *}
 loopdev=""
@@ -332,35 +358,6 @@ if [ "$F" = true ] ; then
   $sudo rm -rf $rootfsdir/lib/firmware
 fi
 $sudo rmdir --ignore-fail-on-non-empty -p $rootfsdir/usr/src
-if [ "$a" = true ]; then
-  if [ ! -f "$rootfsdir/etc/arch-release" ]; then
-    ### Ubuntu / Debian
-    $sudo apt-get install --yes $SCRIPT_PACKAGES_DEBIAN
-    if [ $bpir64 != "true" ]; then
-      $sudo apt-get install --yes qemu-user-static gcc-aarch64-linux-gnu libc6:i386 
-    fi
-  else
-    ### Archlinux
-    if [ $bpir64 == "true" ]; then
-      $sudo pacman -Syu --needed --noconfirm $SCRIPT_PACKAGES_ARCHLX
-      ./rootfs-arch/usr/local/sbin/aurinstall $SCRIPT_PACKAGES_AUR
-    else  # Not running on BPI-R64, just use yay
-      $sudo pacman -Syu --needed --noconfirm go
-      pacman -Qi yay
-      [[ $? != 0 ]] && ./rootfs-arch/usr/local/sbin/aurinstall yay
-      yay -S --noconfirm $SCRIPT_PACKAGES_ARCHLX $SCRIPT_PACKAGES_AUR aarch64-linux-gnu-gcc qemu-user-static
-    fi
-  fi
-  if [ $bpir64 != "true" ]; then
-    gccname=$(basename $GCC)
-    if [ ! -z $GCC ]; then
-      wget -nv -N $GCC
-      rm -rf gcc
-      mkdir gcc
-      tar -xf $gccname -C gcc  
-    fi
-  fi
-fi
 if [ -z $GCC ]; then
   gccpath=""
 else
@@ -397,11 +394,15 @@ if [ "$r" = true ]; then
           --include="$packages" $RELEASE $rootfsdir $DEBOOTSTR_SOURCE
         $sudo cp /usr/bin/qemu-aarch64-static $rootfsdir/usr/bin/
         $schroot /debootstrap/debootstrap --second-stage
-      else
-        wget --no-verbose $ARCHBOOTSTRAP --no-clobber -P ./tools/
-        $sudo bash ./tools/$(basename $ARCHBOOTSTRAP) -a aarch64 $rootfsdir 2>&0
-        $sudo arch-chroot $rootfsdir /usr/bin/pacman --noconfirm --arch aarch64 -Sy \
-              --overwrite \* $NEEDED_PACKAGES_ARCHLX $EXTRA_PACKAGES_ARCHLX
+      else  ### install Arch Linux
+        if [ ! -f "/etc/arch-release" ]; then ### from Ubuntu / Debian
+          wget --no-verbose $ARCHBOOTSTRAP --no-clobber -P ./tools/
+          $sudo bash ./tools/$(basename $ARCHBOOTSTRAP) -a aarch64 $rootfsdir 2>&0
+          $sudo arch-chroot $rootfsdir /usr/bin/pacman --noconfirm --arch aarch64 -Sy \
+                --overwrite \* $NEEDED_PACKAGES_ARCHLX $EXTRA_PACKAGES_ARCHLX
+        else ### from Arch Linux
+          $sudo pacstrap $rootfsdir $NEEDED_PACKAGES_ARCHLX $EXTRA_PACKAGES_ARCHLX
+        fi
         yes | $sudo arch-chroot $rootfsdir /usr/bin/pacman -Scc
       fi  
       if [ "$t" = true ]; then

@@ -7,6 +7,6 @@ diff -Naur a/PKGBUILD b/PKGBUILD
  }
 +
 +prepare() {
-+    patch --directory="${srcdir}" --forward --strip=1 --input="/usr/local/etc/aurinstall/${pkgname}-src.patch"
++    patch --directory="${srcdir}" --forward --strip=1 --input="${startdir}/${pkgname}-src.patch"
 +}
 +

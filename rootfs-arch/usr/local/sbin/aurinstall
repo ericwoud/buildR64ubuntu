@@ -17,7 +17,8 @@ do
     [[ $? != 0 ]] && exit
   fi
   if [ -f "$patchpath/$package.patch" ]; then
-    patch --directory="/tmp/aurinstall/$package" --forward --strip=1 --input="$patchpath/$package.patch"
+    $sudo cp $patchpath/$package-* "/tmp/aurinstall/$package/"
+    cat "$patchpath/$package.patch" | sudo -u nobody patch --directory="/tmp/aurinstall/$package" --forward --strip=1
   fi
   (cd "/tmp/aurinstall/$package"; sudo HOME=/tmp/aurinstall/$package -u nobody makepkg --ignorearch)
   for package in /tmp/aurinstall/$package/*.pkg.*
