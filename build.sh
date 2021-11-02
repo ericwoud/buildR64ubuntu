@@ -160,9 +160,14 @@ function formatsd {
     dd if=/dev/zero of=$IMAGE_FILE bs=1M count=$IMAGE_SIZE_MB status=progress 
     attachloopdev
     device=$loopdev
-  else            
+  else
+    echo ROOTDEV: $rootdev
+    lsblkrootdev=($(lsblk -prno name,pkname,partlabel | grep $rootdev))
+    [ -z $lsblkrootdev ] && exit
+    realrootdev=${lsblkrootdev[1]}
     readarray -t options < <(lsblk --nodeps -no name,serial,size \
-                     | grep $formatpattern | grep -v 'boot0\|boot1\|boot2')
+                      | grep -v "^"${realrootdev/"/dev/"/}'\|^loop' \
+                      | grep -v 'boot0 \|boot1 \|boot2 ')
     PS3="Choose device to format: "
     select dev in "${options[@]}" "Quit" ; do
       if (( REPLY > 0 && REPLY <= ${#options[@]} )) ; then
@@ -248,13 +253,11 @@ fi
 echo "Target device="$ATFDEVICE
 if [ "$(tr -d '\0' 2>/dev/null </proc/device-tree/model)" != "Bananapi BPI-R64" ]; then
   echo "Not running on Bananapi BPI-R64"
-  formatpattern="^sd"
   bpir64="false"
 else
   echo "Running on Bananapi BPI-R64"
-  formatpattern="^mmc"
-  GCC=""
   bpir64="true"
+  GCC=""
 fi
 if [ $ATFDEVICE = "emmc" ];then
   ubootdevnr=0
