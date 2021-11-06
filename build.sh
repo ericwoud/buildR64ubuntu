@@ -398,14 +398,13 @@ if [ "$r" = true ]; then
         $sudo cp /usr/bin/qemu-aarch64-static $rootfsdir/usr/bin/
         $schroot /debootstrap/debootstrap --second-stage
       else  ### install Arch Linux
-        if [ ! -f "/etc/arch-release" ]; then ### from Ubuntu / Debian
-          wget --no-verbose $ARCHBOOTSTRAP --no-clobber -P ./tools/
-          $sudo bash ./tools/$(basename $ARCHBOOTSTRAP) -a aarch64 $rootfsdir 2>&0
-          $sudo arch-chroot $rootfsdir /usr/bin/pacman --noconfirm --arch aarch64 -Sy \
-                --overwrite \* $NEEDED_PACKAGES_ARCHLX $EXTRA_PACKAGES_ARCHLX
-        else ### from Arch Linux
-          $sudo pacstrap $rootfsdir $NEEDED_PACKAGES_ARCHLX $EXTRA_PACKAGES_ARCHLX
+        if [ -f "/etc/arch-release" ]; then ### from from Arch Linux
+          $sudo systemctl start systemd-binfmt
         fi
+        wget --no-verbose $ARCHBOOTSTRAP --no-clobber -P ./tools/
+        $sudo bash ./tools/$(basename $ARCHBOOTSTRAP) -q -a aarch64 $rootfsdir 2>&0
+        $sudo arch-chroot $rootfsdir /usr/bin/pacman --noconfirm --arch aarch64 -Sy \
+              --overwrite \* $NEEDED_PACKAGES_ARCHLX $EXTRA_PACKAGES_ARCHLX
         yes | $sudo arch-chroot $rootfsdir /usr/bin/pacman -Scc
       fi  
       if [ "$t" = true ]; then
