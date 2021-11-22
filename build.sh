@@ -200,7 +200,7 @@ function formatsd {
   $sudo partprobe "${device}"
   lsblkdev=""
   while [ -z $lsblkdev ]; do
-    lsblkdev=($(lsblk -prno name,pkname,partlabel | grep root-bpir64-${ATFDEVICE}))
+    lsblkdev=($(lsblk -prno name,pkname,partlabel ${device}| grep root-bpir64-${ATFDEVICE}))
     sleep 0.1
   done
   mountdev=${lsblkdev[0]}
@@ -302,10 +302,7 @@ else
   device=""
 fi
 if [ "$USE_LOOPDEV" == true ]; then
-  if [ ! -z $mountdev ]; then
-    echo "SD-Card is also inserted, cannot use loop-device!"
-    exit
-  fi
+  [ ! -z $mountdev ] && echo "WARNING: Be carefull, another ${ATFDEVICE}-image is also inserted!"
   if [ "$S" = true ] && [ "$D" = true ]; then formatsd; exit; fi
   attachloopdev
   rootfsdir=/mnt/bpirootfs
