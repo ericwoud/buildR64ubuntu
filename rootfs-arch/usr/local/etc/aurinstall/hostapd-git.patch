@@ -1,0 +1,12 @@
+diff -Naur a/PKGBUILD b/PKGBUILD
+--- a/PKGBUILD	2021-11-24 13:39:15.970483363 +0100
++++ b/PKGBUILD	2021-11-24 13:43:33.348905426 +0100
+@@ -29,7 +29,7 @@
+ 	cd "${srcdir}/hostap/hostapd"
+ 	sed -i 's:/etc/hostapd:/etc/hostapd/hostapd:' hostapd.conf
+ 	sed -i '/CONFIG_LIBNL32=y/s/^#//' defconfig
+-	cp defconfig .config
++	cp "${startdir}/${pkgname}-config" .config
+ 	make
+ }
+ 
