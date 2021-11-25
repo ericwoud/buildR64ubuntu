@@ -57,7 +57,7 @@ SD_BLOCK_SIZE_KB=8                   # in kilo bytes
 SD_ERASE_SIZE_MB=4                   # in Mega bytes
 
 IMAGE_SIZE_MB=7456                # Size of image
-BL2_END_KB=1024                   # End of bl2 partition
+ATF_END_KB=1024                   # End of atf partition
 MINIMAL_SIZE_FIP_MB=15             # Minimal size of fip partition
 
 #ROOTFS_FS="ext4"
@@ -182,7 +182,7 @@ function formatsd {
     read -p "Type <format> to format: " prompt
     [[ $prompt != "format" ]] && exit
   fi
-  minimalrootstart=$(( $BL2_END_KB + ($MINIMAL_SIZE_FIP_MB * 1024) ))
+  minimalrootstart=$(( $ATF_END_KB + ($MINIMAL_SIZE_FIP_MB * 1024) ))
   rootstart=0
   while [[ $rootstart -lt $minimalrootstart ]]; do 
     rootstart=$(( $rootstart + ($SD_ERASE_SIZE_MB * 1024) ))
@@ -191,11 +191,11 @@ function formatsd {
   $sudo parted -s -- "${device}" unit kiB \
     mklabel gpt \
     mkpart primary $rootstart 100% \
-    mkpart primary $BL2_END_KB $rootstart \
-    mkpart primary 0% $BL2_END_KB \
+    mkpart primary $ATF_END_KB $rootstart \
+    mkpart primary 0% $ATF_END_KB \
     name 1 root-bpir64-${ATFDEVICE} \
     name 2 fip \
-    name 3 bl2 \
+    name 3 atf \
     print
   $sudo partprobe "${device}"
   lsblkdev=""
