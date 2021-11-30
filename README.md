@@ -112,7 +112,9 @@ Now build the whole image, same as before.
 
 ## Using port 5 of the dsa switch
 
-Note: This does not work when running from emmc. Looks like eth1 does not get initialised correctly. Follow the steps below to remove it if you want to use a Router setup and run on emmc.
+Note: This does not work when running from emmc and the bootswitch is set to try from sdmmc first, position 1. Only onder these two conditions combined, it seems eth1 does not get initialised correctly. The eth1 gmac works fine running from emmc, with sw1 set to 0, try boot from emmc first.
+
+Follow the steps below if you want to use a Router setup and run on emmc with sw1 set to 1. You will then not be using eth1 and port 5 of the dsa switch 
 
 Port 5 is available and named aux. Wan and aux port are in a separate vlan. Eth1 is setup as outgoing port instead of wan port.
 
