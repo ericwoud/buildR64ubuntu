@@ -6,8 +6,9 @@ GCC=""   # use standard ubuntu gcc version
 SRC=""                 # Installs source in /usr/src of sd-card/image
 #SRC="./src"           # Installs source in same folder as build.sh
 #SRC="/usr/src"        # When running on sd-card, use the same source to build emmc 
+#SRC="/media/$USER/FILES/src" # Source on removable media
 
-KERNELVERSION="5.15-rc1"        # Custom Kernel files in folder named 'linux-5.12'
+KERNELVERSION="5.16-rc3"        # Custom Kernel files in folder named 'linux-5.12'
 #KERNELVERSION="master"          # master (head) of git, name folder 'linux-master'
 
 #KERNEL="http://kernel.ubuntu.com/~kernel-ppa/mainline"
@@ -42,7 +43,7 @@ KERNELBOOTARGS="console=ttyS0,115200 rw rootwait root=PARTLABEL=root-bpir64-${AT
 #USE_LOOPDEV="true"          # Remove SD card, because of same label
 
 IMAGE_FILE="./my-bpir64-"$ATFDEVICE".img"
-#IMAGE_FILE="/media/$USER/FILES//my-bpir64-"$ATFDEVICE".img"
+#IMAGE_FILE="/media/$USER/FILES/my-bpir64-"$ATFDEVICE".img"
 
 # https://github.com/bradfa/flashbench.git, running multiple times:
 # sudo ./flashbench -a --count=64 --blocksize=1024 /dev/sda
@@ -398,6 +399,7 @@ if [ "$r" = true ]; then
         if [ -f "/etc/arch-release" ]; then ### from from Arch Linux
           $sudo systemctl start systemd-binfmt
         fi
+        rm -f ./tools/$(basename $ARCHBOOTSTRAP)
         wget --no-verbose $ARCHBOOTSTRAP --no-clobber -P ./tools/
         $sudo bash ./tools/$(basename $ARCHBOOTSTRAP) -q -a aarch64 $rootfsdir 2>&0
         $sudo arch-chroot $rootfsdir /usr/bin/pacman --noconfirm --arch aarch64 -Sy \
@@ -554,7 +556,7 @@ if [ "$k" = true ] ; then
   $sudo mkdir -p $kerneldir/outoftree
   symlinks -cr linux-*/
   symlinks -cr rootfs-*/
-  $sudo cp -r --remove-destination -v linux-$KERNELVERSION/. $kerneldir
+  $sudo cp -r --remove-destination -v linux-$KERNELVERSION/!(firmware) $kerneldir
   for bp in $kerneldir/*.bash ; do source $bp                                             ; $sudo rm -rf $bp ; done
   for bp in $kerneldir/*.patch; do echo $bp ; $sudo patch -d $kerneldir -p1 -N -r - < $bp ; $sudo rm -rf $bp ; done
   $sudo make $makeoptions KCONFIG_ALLCONFIG=.config allnoconfig # only add config entries added in diff.patch or script.bash
