@@ -39,6 +39,10 @@ Change directory
 cd buildR64ubuntu
 ```
 
+Install all necessary packages with:
+```
+./build.sh -a
+```
 Check your SD card with the following command, write down where the original first partition starts! The script will first show you this info before formatting anything. Set SD_BLOCK_SIZE_KB and SD_ERASE_SIZE_MB in the script as described there. Don't format a brand new SD card before you find the original erase/block size. It is the best way to determine this.
 ```
 ./build.sh -SD

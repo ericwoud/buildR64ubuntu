@@ -132,9 +132,9 @@ function unmountrootfs {
 }
 
 function attachloopdev {
-  if [ ! -f "$IMAGE_FILE" ]; then echo "File $IMAGE_FILE does not exist"; exit; fi
   local -n loopdevlocal=loopdev
   loop_dirty=$($sudo udisksctl loop-setup -f $IMAGE_FILE)
+  [[ $? != 0 ]] && exit
   loop_dirty=${loop_dirty#*/dev/}
   loopdevlocal="/dev/"${loop_dirty/./}
 }
