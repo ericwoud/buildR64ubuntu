@@ -159,7 +159,8 @@ function formatsd {
       read -p "Type <format> to format: " prompt
       [[ $prompt != "format" ]] && exit
     fi  
-    dd if=/dev/zero of=$IMAGE_FILE bs=1M count=$IMAGE_SIZE_MB status=progress 
+    dd if=/dev/zero of=$IMAGE_FILE bs=1M count=$IMAGE_SIZE_MB status=progress
+    [[ $? != 0 ]] && exit
     attachloopdev
     device=$loopdev
   else
@@ -281,14 +282,12 @@ if [ "$a" = true ]; then
       ./rootfs-arch/usr/local/sbin/aurinstall binfmt-qemu-static qemu-user-static-bin
     fi
   fi
-  if [ $bpir64 != "true" ]; then
+  if [ $bpir64 != "true" ] && [ ! -z $GCC ]; then
     gccname=$(basename $GCC)
-    if [ ! -z $GCC ]; then
-      wget -nv -N $GCC
-      rm -rf gcc
-      mkdir gcc
-      tar -xf $gccname -C gcc  
-    fi
+    wget -nv -N $GCC
+    rm -rf gcc
+    mkdir gcc
+    tar -xf $gccname -C gcc  
   fi
 fi
 
@@ -373,6 +372,7 @@ else
 fi
 [ $bpir64 != "true" ] && crossc="CROSS_COMPILE="$gccpath"aarch64-linux-gnu-" || crossc=""
 makej=-j$(grep ^processor /proc/cpuinfo  | wc -l)
+makej=-j1
 echo "SETUP="$SETUP
 echo "Rootfsdir="$rootfsdir
 echo "Src="$src
@@ -599,6 +599,7 @@ if [ "$k" = true ] ; then
                 --nt-fw $kerneldir/arch/arm64/boot/Image \
          --nt-fw-config $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb
     $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool info $kerneldir/arch/arm64/boot/fip.bin
+    $sudo cp -af $kerneldir/arch/arm64/boot/fip.bin $kerneldir/arch/arm64/boot/fip-$kernelrelease.bin
     writefip $kerneldir/arch/arm64/boot/fip.bin
   fi
 fi
