@@ -6,7 +6,6 @@ GCC=""   # use standard ubuntu gcc version
 SRC=""                 # Installs source in /usr/src of sd-card/image
 #SRC="./src"           # Installs source in same folder as build.sh
 #SRC="/usr/src"        # When running on sd-card, use the same source to build emmc 
-#SRC="/media/$USER/FILES/src" # Source on removable media
 
 KERNELVERSION="5.16-rc3"        # Custom Kernel files in folder named 'linux-5.12'
 #KERNELVERSION="master"          # master (head) of git, name folder 'linux-master'
@@ -43,7 +42,6 @@ KERNELBOOTARGS="console=ttyS0,115200 rw rootwait root=PARTLABEL=root-bpir64-${AT
 #USE_LOOPDEV="true"          # Remove SD card, because of same label
 
 IMAGE_FILE="./my-bpir64-"$ATFDEVICE".img"
-#IMAGE_FILE="/media/$USER/FILES/my-bpir64-"$ATFDEVICE".img"
 
 # https://github.com/bradfa/flashbench.git, running multiple times:
 # sudo ./flashbench -a --count=64 --blocksize=1024 /dev/sda
@@ -106,6 +104,7 @@ LC="en_US.utf8"                      # Locale
 TIMEZONE="Europe/Paris"              # Timezone
 ROOTPWD="admin"                      # Root password
 
+[ -f "./override.sh" ] && source ./override.sh
 
 [ "$USE_UBOOT" == true ] && ROOTFS_FS="ext4" # f2fs not supported in U-Boot
 
@@ -470,6 +469,8 @@ if [ "$b" = true ]; then
     $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool --verbose create $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin \
                 --nt-fw $src/uboot-$UBOOTBRANCH/u-boot.bin
     $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool info $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
+    $sudo cp -vf $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin \
+                $src/atf-$ATFBRANCH/build/mt7622/release/fip-$UBOOTBRANCH-$ATFDEVICE.bin
     writefip $src/atf-$ATFBRANCH/build/mt7622/release/fip.bin
   fi
   $sudo dd of="${mountdev::-1}3" if=/dev/zero 2>/dev/null
@@ -599,7 +600,7 @@ if [ "$k" = true ] ; then
                 --nt-fw $kerneldir/arch/arm64/boot/Image \
          --nt-fw-config $kerneldir/arch/arm64/boot/dts/mediatek/$KERNELDTB.dtb
     $sudo $src/atf-$ATFBRANCH/tools/fiptool/fiptool info $kerneldir/arch/arm64/boot/fip.bin
-    $sudo cp -af $kerneldir/arch/arm64/boot/fip.bin $kerneldir/arch/arm64/boot/fip-$kernelrelease.bin
+    $sudo cp -vf $kerneldir/arch/arm64/boot/fip.bin $kerneldir/arch/arm64/boot/fip-$kernelrelease-$ATFDEVICE.bin
     writefip $kerneldir/arch/arm64/boot/fip.bin
   fi
 fi

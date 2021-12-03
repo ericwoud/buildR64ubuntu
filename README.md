@@ -147,7 +147,6 @@ Some DSA drivers have a problem with this setup, but some are recently fixed wit
 
 ## TODO:
 
-* Get FDB delete functions to work, see [vlan enabled bridge bug?](http://forum.banana-pi.org/t/vlan-enabled-bridge-bug/12254)
 * Implement 802.11k 802.11r 802.11v.
 * MyGica T230C2 DVB-T and DVB-C support.
 * Guest WIFI
