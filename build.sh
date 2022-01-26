@@ -178,7 +178,7 @@ function formatsd {
       fi
     done    
     device="/dev/"${dev%% *}
-    for PART in `df -k | awk '{ print $1 }' | grep "${device}"` ; do umount $PART; done
+    for PART in `df -k | awk '{ print $1 }' | grep "${device}"` ; do $sudo umount $PART; done
     $sudo parted -s "${device}" unit MiB print
     echo -e "\nAre you sure you want to format "$device"???" 
     read -p "Type <format> to format: " prompt
@@ -371,7 +371,7 @@ else
 fi
 [ $bpir64 != "true" ] && crossc="CROSS_COMPILE="$gccpath"aarch64-linux-gnu-" || crossc=""
 makej=-j$(grep ^processor /proc/cpuinfo  | wc -l)
-makej=-j1
+#makej=-j1
 echo "SETUP="$SETUP
 echo "Rootfsdir="$rootfsdir
 echo "Src="$src
