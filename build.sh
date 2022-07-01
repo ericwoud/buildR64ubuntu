@@ -93,7 +93,7 @@ arch-install-scripts udisks2 f2fs-tools"
 
 NEEDED_PACKAGES_ARCHLX="base hostapd openssh crda iproute2 nftables"
 EXTRA_PACKAGES_ARCHLX="vim screen"
-SCRIPT_PACKAGES_ARCHLX="base-devel git debootstrap wget uboot-tools ncurses openssl \
+SCRIPT_PACKAGES_ARCHLX="base-devel git asp debootstrap wget uboot-tools ncurses openssl \
 bc ca-certificates parted gzip arch-install-scripts udisks2 f2fs-tools"
 SCRIPT_PACKAGES_AUR="zerofree symlinks mmc-utils-git"
 
@@ -125,6 +125,7 @@ function unmountrootfs {
       sleep 0.1
     done    
     $sudo rm -rf $rootfsdir
+    $sudo sync
     echo -e "Done. You can remove the card now.\n"
   fi
   unset rootfsdir

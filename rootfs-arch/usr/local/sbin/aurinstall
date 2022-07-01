@@ -10,11 +10,16 @@ patchpath=$(dirname $0)"/../etc/aurinstall"
 function finish { $sudo rm -rf /tmp/aurinstall ; }
 trap finish EXIT
 
+sudo -u nobody mkdir /tmp/aurinstall
+
 for package in $packages
 do 
   if [ ! -d "/tmp/aurinstall/$package" ]; then
-    sudo -u nobody git --no-pager clone --depth 1 https://aur.archlinux.org/$package.git /tmp/aurinstall/$package 2>&0
-    [[ $? != 0 ]] && exit
+    (cd "/tmp/aurinstall/"; sudo ASPROOT=/tmp/aurinstall ASPCACHE=/tmp/aurinstall -u nobody asp export $package)
+    if [[ $? != 0 ]]; then
+      sudo -u nobody git --no-pager clone --depth 1 https://aur.archlinux.org/$package.git /tmp/aurinstall/$package 2>&0
+      [[ $? != 0 ]] && exit
+    fi
   fi
   if [ -f "$patchpath/$package.patch" ]; then
     $sudo cp $patchpath/$package-* "/tmp/aurinstall/$package/"
