@@ -1,5 +1,7 @@
 # buildR64ubuntu
 
+This script is replaced by [buildR64arch](https://github.com/ericwoud/buildR64arch.git) and no longer maintained.
+
 Install a minimal Arch-Linux, Ubuntu or Debian on Banana Pi R64 from scratch. 
 
 Based on: [buildWubuntu](https://github.com/ericwoud/buildWubuntu.git)
